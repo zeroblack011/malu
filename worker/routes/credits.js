@@ -145,5 +145,4 @@ async function deductCredits(env, userId, amount, description) {
     return user.credits;
 }
 
-export { creditsRoutes, addCredits, deductCredits };
-export const router;
+export { router as creditsRoutes, addCredits, deductCredits };
