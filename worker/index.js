@@ -4,6 +4,7 @@
  */
 
 import { Router } from 'itty-router';
+import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 import { authRoutes } from './routes/auth';
 import { creditsRoutes } from './routes/credits';
 import { servicesRoutes } from './routes/services';
@@ -42,22 +43,34 @@ router.get('/api/health', () => {
 });
 
 // Static assets (PWA)
-router.get('*', async (request, env) => {
-    const url = new URL(request.url);
-    let path = url.pathname;
-
-    // Serve index.html for root
-    if (path === '/') {
-        path = '/index.html';
-    }
-
-    // Try to get asset
+router.get('*', async (request, env, ctx) => {
     try {
-        const asset = await env.ASSETS.fetch(request);
-        return asset;
+        return await getAssetFromKV(
+            {
+                request,
+                waitUntil: ctx.waitUntil.bind(ctx),
+            },
+            {
+                ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                ASSET_MANIFEST: JSON.parse(__STATIC_CONTENT_MANIFEST),
+            }
+        );
     } catch (e) {
-        // Return 404 page or redirect to home
-        return new Response('Not Found', { status: 404 });
+        // If asset not found, serve index.html for SPA routing
+        try {
+            return await getAssetFromKV(
+                {
+                    request: new Request(`${new URL(request.url).origin}/index.html`, request),
+                    waitUntil: ctx.waitUntil.bind(ctx),
+                },
+                {
+                    ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                    ASSET_MANIFEST: JSON.parse(__STATIC_CONTENT_MANIFEST),
+                }
+            );
+        } catch (e) {
+            return new Response('Not Found', { status: 404 });
+        }
     }
 });
 
@@ -73,7 +86,7 @@ export default {
             // Add environment to request for route handlers
             request.env = env;
 
-            return await router.handle(request);
+            return await router.handle(request, env, ctx);
         } catch (error) {
             console.error('Worker error:', error);
             return jsonResponse({
