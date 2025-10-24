@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - Malu Digital</title>
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-header">
+                <h1 class="sidebar-logo">Malu Admin</h1>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link active" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#orders" class="nav-link" data-page="orders">
+                    <span class="nav-icon">📦</span>
+                    <span>Pedidos</span>
+                </a>
+                <a href="#users" class="nav-link" data-page="users">
+                    <span class="nav-icon">👥</span>
+                    <span>Usuários</span>
+                </a>
+                <a href="#payments" class="nav-link" data-page="payments">
+                    <span class="nav-icon">💳</span>
+                    <span>Pagamentos</span>
+                </a>
+                <a href="#reports" class="nav-link" data-page="reports">
+                    <span class="nav-icon">📈</span>
+                    <span>Relatórios</span>
+                </a>
+                <a href="#settings" class="nav-link" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Configurações</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="btn btn-outline btn-block" onclick="window.location.href='/'">
+                    Voltar ao App
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main">
+            <header class="admin-header">
+                <h2 id="page-title">Dashboard</h2>
+                <div class="header-actions">
+                    <button class="icon-btn" id="refresh-btn">
+                        🔄
+                    </button>
+                    <div class="admin-user">
+                        <span id="admin-name">Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content" id="admin-content">
+                <!-- Dynamic content -->
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-container"></div>
+    <div id="toast-container" class="toast-container"></div>
+
+    <script src="/js/config.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/admin.js"></script>
+</body>
+</html>

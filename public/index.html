@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="description" content="Plataforma de serviços digitais premium">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>Malu Digital Services</title>
+
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/assets/icon-192.png">
+    <link rel="apple-touch-icon" href="/assets/icon-512.png">
+    <link rel="stylesheet" href="/css/main.css">
+    <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">Carregando...</p>
+    </div>
+
+    <!-- App Container -->
+    <div id="app" class="app-container" style="display: none;">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1 class="app-logo">Malu Digital</h1>
+                <div class="header-actions">
+                    <div id="credits-badge" class="credits-badge">
+                        <span class="credits-icon">💎</span>
+                        <span id="user-credits">0</span>
+                    </div>
+                    <button id="notifications-btn" class="icon-btn">
+                        <span class="notification-icon">🔔</span>
+                        <span id="notification-count" class="notification-count" style="display: none;">0</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main-content" class="main-content">
+            <!-- Dynamic content will be injected here -->
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-page="home">
+                <span class="nav-icon">🏠</span>
+                <span class="nav-label">Início</span>
+            </button>
+            <button class="nav-item" data-page="credits">
+                <span class="nav-icon">💳</span>
+                <span class="nav-label">Créditos</span>
+            </button>
+            <button class="nav-item" data-page="orders">
+                <span class="nav-icon">📦</span>
+                <span class="nav-label">Pedidos</span>
+            </button>
+            <button class="nav-item" data-page="profile">
+                <span class="nav-icon">👤</span>
+                <span class="nav-label">Perfil</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Modal Container -->
+    <div id="modal-container"></div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/js/config.js"></script>
+    <script src="/js/utils.js"></script>
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/credits.js"></script>
+    <script src="/js/services.js"></script>
+    <script src="/js/forms.js"></script>
+    <script src="/js/orders.js"></script>
+    <script src="/js/payment.js"></script>
+    <script src="/js/notifications.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/sw-register.js"></script>
+</body>
+</html>

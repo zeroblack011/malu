@@ -1,0 +1,209 @@
+/* Mobile-First Responsive Styles */
+
+/* Extra Small Devices (phones, less than 576px) */
+@media (max-width: 575px) {
+    :root {
+        --font-size-base: 0.9375rem;
+    }
+
+    .app-header {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .app-logo {
+        font-size: var(--font-size-lg);
+    }
+
+    .main-content {
+        padding: var(--spacing-sm);
+    }
+
+    .card {
+        padding: var(--spacing-md);
+    }
+
+    .btn {
+        padding: var(--spacing-md) var(--spacing-lg);
+    }
+
+    .modal {
+        max-width: 100%;
+        margin: var(--spacing-sm);
+    }
+
+    .toast-container {
+        left: var(--spacing-sm);
+        right: var(--spacing-sm);
+    }
+
+    .toast {
+        min-width: unset;
+        width: 100%;
+    }
+
+    .grid-cols-2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Small Devices (landscape phones, 576px and up) */
+@media (min-width: 576px) {
+    .container {
+        max-width: 540px;
+        margin: 0 auto;
+    }
+}
+
+/* Medium Devices (tablets, 768px and up) */
+@media (min-width: 768px) {
+    .container {
+        max-width: 720px;
+    }
+
+    .main-content {
+        padding: var(--spacing-lg);
+    }
+
+    .grid-cols-2 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .bottom-nav {
+        max-width: 720px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    }
+}
+
+/* Large Devices (desktops, 992px and up) */
+@media (min-width: 992px) {
+    .container {
+        max-width: 960px;
+    }
+
+    .grid-cols-2 {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Extra Large Devices (large desktops, 1200px and up) */
+@media (min-width: 1200px) {
+    .container {
+        max-width: 1140px;
+    }
+}
+
+/* Landscape Orientation */
+@media (orientation: landscape) and (max-height: 500px) {
+    .app-header {
+        padding: var(--spacing-xs) var(--spacing-md);
+    }
+
+    .bottom-nav {
+        padding: var(--spacing-xs) 0;
+    }
+
+    .nav-label {
+        display: none;
+    }
+
+    .modal {
+        max-height: 95vh;
+    }
+}
+
+/* Touch Optimizations */
+@media (hover: none) and (pointer: coarse) {
+    .btn,
+    .nav-item,
+    .service-card,
+    .icon-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* iOS Safe Area */
+@supports (padding: env(safe-area-inset-top)) {
+    .app-header {
+        padding-top: calc(var(--spacing-md) + env(safe-area-inset-top));
+    }
+
+    .bottom-nav {
+        padding-bottom: calc(var(--spacing-sm) + env(safe-area-inset-bottom));
+    }
+
+    .main-content {
+        padding-bottom: calc(70px + var(--spacing-md) + env(safe-area-inset-bottom));
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --background: #111827;
+        --surface: #1f2937;
+        --text-primary: #f9fafb;
+        --text-secondary: #d1d5db;
+        --border-color: #374151;
+    }
+
+    .card,
+    .modal,
+    .toast {
+        background-color: var(--surface);
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
+        background-color: var(--background);
+        border-color: var(--border-color);
+        color: var(--text-primary);
+    }
+
+    .service-card {
+        background-color: var(--surface);
+    }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    .btn,
+    .form-input,
+    .form-select,
+    .form-textarea {
+        border-width: 3px;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .app-header,
+    .bottom-nav,
+    .btn,
+    .toast-container {
+        display: none !important;
+    }
+
+    .main-content {
+        padding: 0;
+    }
+
+    .card {
+        box-shadow: none;
+        border: 1px solid var(--border-color);
+    }
+}
