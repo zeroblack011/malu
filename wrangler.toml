@@ -10,13 +10,11 @@ bucket = "./public"
 # KV Namespaces
 [[kv_namespaces]]
 binding = "USERS_KV"
-id = "your_users_kv_namespace_id" # Replace with your KV namespace ID
-preview_id = "your_users_kv_preview_id"
+id = "13237a06d9a245a9b818c49ecb54b07e"
 
 [[kv_namespaces]]
 binding = "ORDERS_KV"
-id = "your_orders_kv_namespace_id" # Replace with your KV namespace ID
-preview_id = "your_orders_kv_preview_id"
+id = "78bcca04d19b46818017d218fdd1ceda"
 
 # Environment Variables (non-sensitive)
 [vars]
