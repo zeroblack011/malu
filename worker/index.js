@@ -6,7 +6,7 @@
 
 import { Router } from 'itty-router';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
-import { getIndexHTML } from './static-app';
+import { getIndexHTML } from './static-app-simple';
 
 // Create router
 const router = Router();
