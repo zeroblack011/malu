@@ -413,15 +413,6 @@ router.get('/api/health', () => {
     });
 });
 
-// ==================== FRONTEND ====================
-
-router.get('/', async (request, env, ctx) => {
-    // TODO: Retornar HTML do frontend completo
-    return new Response('Frontend em desenvolvimento...', {
-        headers: { 'Content-Type': 'text/html', ...corsHeaders },
-    });
-});
-
 // ==================== STATIC ASSETS ====================
 
 router.get('*', async (request, env, ctx) => {
