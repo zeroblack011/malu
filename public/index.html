@@ -2,97 +2,205 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#2563eb">
-    <meta name="description" content="Plataforma de serviços digitais premium">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-    <title>Malu Digital Services</title>
-
-    <link rel="manifest" href="/manifest.json">
-    <link rel="icon" type="image/png" href="/assets/icon-192.png">
-    <link rel="apple-touch-icon" href="/assets/icon-512.png">
-    <link rel="stylesheet" href="/css/main.css">
-    <link rel="stylesheet" href="/css/mobile.css">
-    <link rel="stylesheet" href="/css/design-system.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>MALU - Serviços Digitais Premium</title>
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <!-- Loading Screen -->
-    <div id="loading-screen" class="loading-screen">
-        <div class="loading-spinner"></div>
-        <p class="loading-text">Carregando...</p>
-    </div>
-
-    <!-- App Container -->
-    <div id="app" class="app-container" style="display: none;">
-        <!-- Header -->
-        <header class="app-header">
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
             <div class="header-content">
-                <h1 class="app-logo">Malu Digital</h1>
-                <div class="header-actions">
-                    <div id="credits-badge" class="credits-badge">
-                        <span class="credits-icon">💎</span>
-                        <span id="user-credits">0</span>
-                    </div>
-                    <button id="notifications-btn" class="icon-btn">
-                        <span class="notification-icon">🔔</span>
-                        <span id="notification-count" class="notification-count" style="display: none;">0</span>
-                    </button>
+                <h1 class="logo">MALU DIGITAL</h1>
+                <nav class="nav" id="mainNav" style="display:none;">
+                    <button class="nav-btn active" data-view="home">Início</button>
+                    <button class="nav-btn" data-view="services">Serviços</button>
+                    <button class="nav-btn" data-view="credits">Comprar Créditos</button>
+                    <button class="nav-btn" data-view="orders">Meus Pedidos</button>
+                </nav>
+                <div class="user-info" id="userInfo" style="display:none;">
+                    <span class="credits-display">
+                        <span class="credit-label">Créditos:</span>
+                        <strong id="userCredits" class="credit-value">0</strong>
+                    </span>
                 </div>
             </div>
-        </header>
+        </div>
+    </header>
 
-        <!-- Main Content -->
-        <main id="main-content" class="main-content">
-            <!-- Dynamic content will be injected here -->
-        </main>
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
 
-        <!-- Bottom Navigation -->
-        <nav class="bottom-nav">
-            <button class="nav-item active" data-page="home">
-                <span class="nav-icon">🏠</span>
-                <span class="nav-label">Início</span>
-            </button>
-            <button class="nav-item" data-page="credits">
-                <span class="nav-icon">💳</span>
-                <span class="nav-label">Créditos</span>
-            </button>
-            <button class="nav-item" data-page="orders">
-                <span class="nav-icon">📦</span>
-                <span class="nav-label">Pedidos</span>
-            </button>
-            <button class="nav-item" data-page="profile">
-                <span class="nav-icon">👤</span>
-                <span class="nav-label">Perfil</span>
-            </button>
-        </nav>
+            <!-- Home View -->
+            <div id="homeView" class="view active">
+
+                <!-- Registration Card -->
+                <div class="card register-card" id="registerCard">
+                    <div class="hero">
+                        <h2>Serviços Digitais Premium</h2>
+                        <p class="hero-subtitle">Sistema completo de créditos para empreendedores digitais</p>
+                    </div>
+
+                    <div class="form-container">
+                        <h3>Começar Agora</h3>
+                        <form id="registerForm">
+                            <div class="form-group">
+                                <label>Nome Completo</label>
+                                <input type="text" id="regName" required placeholder="Digite seu nome completo">
+                            </div>
+                            <div class="form-group">
+                                <label>Email</label>
+                                <input type="email" id="regEmail" required placeholder="seu@email.com">
+                            </div>
+                            <div class="form-group">
+                                <label>Telefone / WhatsApp</label>
+                                <input type="tel" id="regPhone" required placeholder="(11) 99999-9999">
+                            </div>
+                            <button type="submit" class="btn-primary btn-large">Criar Minha Conta</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Welcome Card (hidden initially) -->
+                <div class="card welcome-card" id="welcomeCard" style="display:none;">
+                    <h2>Bem-vindo, <span id="userName"></span>!</h2>
+                    <div class="welcome-stats">
+                        <div class="stat-box">
+                            <span class="stat-label">Seus Créditos</span>
+                            <span class="stat-value" id="userCreditsWelcome">0</span>
+                        </div>
+                    </div>
+                    <div class="welcome-actions">
+                        <button class="btn-primary" data-view="credits">Comprar Créditos</button>
+                        <button class="btn-secondary" data-view="services">Ver Todos os Serviços</button>
+                    </div>
+                </div>
+
+                <!-- Features Grid -->
+                <div class="features-section">
+                    <h3 class="section-title">Nossos Principais Serviços</h3>
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon-box">LLC</div>
+                            <h4>LLC nos EUA</h4>
+                            <p>Registro completo de empresa americana com EIN e conta bancária</p>
+                            <span class="feature-price">2.997 créditos</span>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon-box">TTS</div>
+                            <h4>TikTok Shop</h4>
+                            <p>Contas verificadas para vender no TikTok Shop BR, US e UK</p>
+                            <span class="feature-price">a partir de 497 créditos</span>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon-box">PRX</div>
+                            <h4>Proxies Premium</h4>
+                            <p>Proxies residenciais de alta qualidade para múltiplos países</p>
+                            <span class="feature-price">a partir de 37 créditos/mês</span>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon-box">BM</div>
+                            <h4>Business Managers</h4>
+                            <p>Gerenciadores verificados para Facebook, TikTok e Google</p>
+                            <span class="feature-price">a partir de 300 créditos</span>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon-box">APP</div>
+                            <h4>App Personalizado</h4>
+                            <p>Aplicativo mobile customizado para seu negócio</p>
+                            <span class="feature-price">4.997 créditos</span>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon-box">SUP</div>
+                            <h4>Suporte Premium</h4>
+                            <p>Consultoria e suporte técnico especializado</p>
+                            <span class="feature-price">a partir de 97 créditos/mês</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Services View -->
+            <div id="servicesView" class="view">
+                <h2 class="page-title">Catálogo de Serviços</h2>
+                <p class="page-subtitle">19 serviços profissionais disponíveis</p>
+
+                <div class="filters">
+                    <button class="filter-btn active" data-category="all">Todos (19)</button>
+                    <button class="filter-btn" data-category="Empresarial">Empresarial</button>
+                    <button class="filter-btn" data-category="TikTok">TikTok</button>
+                    <button class="filter-btn" data-category="Proxy">Proxy</button>
+                    <button class="filter-btn" data-category="Marketing">Marketing</button>
+                    <button class="filter-btn" data-category="Desenvolvimento">Desenvolvimento</button>
+                    <button class="filter-btn" data-category="Consultoria">Consultoria</button>
+                    <button class="filter-btn" data-category="Suporte">Suporte</button>
+                </div>
+
+                <div id="servicesList" class="services-grid"></div>
+            </div>
+
+            <!-- Credits View -->
+            <div id="creditsView" class="view">
+                <h2 class="page-title">Comprar Créditos</h2>
+                <p class="page-subtitle">Escolha seu pacote e pague via PIX instantaneamente</p>
+
+                <div id="creditPackages" class="credit-packages-grid"></div>
+            </div>
+
+            <!-- Orders View -->
+            <div id="ordersView" class="view">
+                <h2 class="page-title">Meus Pedidos</h2>
+                <p class="page-subtitle">Acompanhe o status dos seus serviços</p>
+
+                <div id="ordersList" class="orders-list">
+                    <div class="empty-state">
+                        <p>Você ainda não fez nenhum pedido</p>
+                        <button class="btn-primary" data-view="services">Ver Serviços</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Service Modal -->
+    <div id="serviceModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <button class="modal-close">&times;</button>
+            <div id="serviceDetails"></div>
+        </div>
     </div>
 
-    <!-- Modal Container -->
-    <div id="modal-container"></div>
+    <!-- PIX Payment Modal -->
+    <div id="pixModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content pix-modal-content">
+            <button class="modal-close">&times;</button>
+            <div id="pixPayment"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="footer-text">&copy; 2025 MALU Digital Services - Todos os direitos reservados</p>
+            <p class="footer-subtext">Sistema de Créditos | Suporte via WhatsApp</p>
+        </div>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+        <div class="spinner"></div>
+        <p>Carregando...</p>
+    </div>
 
     <!-- Toast Notifications -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toastContainer" class="toast-container"></div>
 
-    <!-- Scripts -->
-    <script src="/js/config.js"></script>
-    <script src="/js/utils.js"></script>
-    <script src="/js/validators.js"></script>
-    <script src="/js/error-handler.js"></script>
-    <script src="/js/api.js"></script>
-    <script src="/js/auth.js"></script>
-    <script src="/js/credits.js"></script>
-    <script src="/js/services.js"></script>
-    <script src="/js/forms.js"></script>
-    <script src="/js/orders.js"></script>
-    <script src="/js/payment.js"></script>
-    <script src="/js/notifications.js"></script>
-    <script src="/js/analytics.js"></script>
-    <script src="/js/seo.js"></script>
-    <script src="/js/accessibility.js"></script>
-    <script src="/js/enhanced-ui.js"></script>
-    <script src="/js/app.js"></script>
-    <script src="/js/sw-register.js"></script>
+    <script src="/app.js"></script>
 </body>
 </html>
