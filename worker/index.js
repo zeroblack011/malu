@@ -415,10 +415,12 @@ router.get('/api/health', () => {
 
 // ==================== STATIC ASSETS ====================
 
+// Catch-all for static files and SPA routing
 router.get('*', async (request, env, ctx) => {
-    if (env.__STATIC_CONTENT) {
-        try {
-            const asset = await getAssetFromKV(
+    try {
+        // Try to serve static asset
+        if (env.__STATIC_CONTENT) {
+            return await getAssetFromKV(
                 { request, waitUntil: ctx.waitUntil.bind(ctx) },
                 {
                     ASSET_NAMESPACE: env.__STATIC_CONTENT,
@@ -427,16 +429,29 @@ router.get('*', async (request, env, ctx) => {
                         : {},
                 }
             );
-            return asset;
-        } catch (e) {
-            return new Response('Not Found', { status: 404 });
+        }
+    } catch (e) {
+        // If asset not found, try to serve index.html for SPA routing
+        try {
+            if (env.__STATIC_CONTENT) {
+                const indexRequest = new Request(new URL('/index.html', request.url), request);
+                return await getAssetFromKV(
+                    { request: indexRequest, waitUntil: ctx.waitUntil.bind(ctx) },
+                    {
+                        ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                        ASSET_MANIFEST: typeof __STATIC_CONTENT_MANIFEST !== 'undefined'
+                            ? JSON.parse(__STATIC_CONTENT_MANIFEST)
+                            : {},
+                    }
+                );
+            }
+        } catch (indexError) {
+            console.error('Failed to serve index.html:', indexError);
         }
     }
+
     return new Response('Not Found', { status: 404 });
 });
-
-// 404
-router.all('*', () => jsonResponse({ error: 'Not Found' }, 404));
 
 // ==================== MAIN HANDLER ====================
 
