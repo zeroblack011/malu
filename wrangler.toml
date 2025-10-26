@@ -3,6 +3,9 @@ name = "malu"
 main = "worker/index.js"
 compatibility_date = "2024-01-01"
 
+# Minification - Prevent aggressive function name mangling
+minify = false
+
 # Workers Sites - Serve static assets (PWA)
 [site]
 bucket = "./public"
@@ -31,10 +34,6 @@ routes = [
 
 # Usage Model
 usage_model = "bundled"
-
-# Build configuration
-[build]
-command = "echo 'No build step required'"
 
 # Development
 [env.development]

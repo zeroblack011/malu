@@ -56,19 +56,25 @@ router.get('/', async (request, env, ctx) => {
 
 // Other static assets
 router.get('*', async (request, env, ctx) => {
+    // Workers Sites: serve static assets from KV
     if (env.__STATIC_CONTENT) {
         try {
-            return await getAssetFromKV(
+            // Use proper binding for Workers Sites
+            const asset = await getAssetFromKV(
                 {
                     request,
                     waitUntil: ctx.waitUntil.bind(ctx),
                 },
                 {
                     ASSET_NAMESPACE: env.__STATIC_CONTENT,
-                    ASSET_MANIFEST: JSON.parse(__STATIC_CONTENT_MANIFEST),
+                    ASSET_MANIFEST: typeof __STATIC_CONTENT_MANIFEST !== 'undefined'
+                        ? JSON.parse(__STATIC_CONTENT_MANIFEST)
+                        : {},
                 }
             );
+            return asset;
         } catch (e) {
+            console.error('Asset fetch error:', e);
             return new Response('Asset Not Found', { status: 404 });
         }
     }
