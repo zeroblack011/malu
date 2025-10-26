@@ -45,11 +45,16 @@ router.post('/register', async (request) => {
         await request.env.USERS_KV.put(`user:${userId}`, JSON.stringify(user));
         await request.env.USERS_KV.put(`user:email:${email}`, userId);
 
+        // Generate token for auto-login
+        const token = await generateToken({ userId: user.id, email: user.email });
+        await storeToken(token, { userId: user.id, email: user.email }, request.env);
+
         // Remove password from response
         delete user.password;
 
         return jsonResponse({
             message: 'User registered successfully',
+            token,
             user,
         }, 201);
     } catch (error) {

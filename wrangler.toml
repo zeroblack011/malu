@@ -43,6 +43,3 @@ vars = { ASAAS_ENVIRONMENT = "sandbox" }
 # Production
 [env.production]
 vars = { ASAAS_ENVIRONMENT = "production" }
-
-# Compatibility
-compatibility_flags = ["nodejs_compat"]
