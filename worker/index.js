@@ -1,24 +1,23 @@
 /**
- * Cloudflare Worker - Malu Digital Services
- * Sistema completo com pagamento PIX via Asaas
+ * SISTEMA COMPLETO - 19 SERVIÇOS + CRÉDITOS
+ * Cloudflare Worker Backend
  */
 
 import { Router } from 'itty-router';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
-import { getIndexHTML } from './static-app-pro';
 import { createAsaasCustomer, createAsaasPayment, getAsaasPaymentStatus } from './utils/asaas';
+import { ALL_SERVICES, CREDIT_PACKAGES } from './services-complete';
 
 const router = Router();
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-ID',
 };
 
 router.options('*', () => new Response(null, { headers: corsHeaders }));
 
-// Helper function
 function jsonResponse(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
@@ -26,110 +25,103 @@ function jsonResponse(data, status = 200) {
     });
 }
 
-// Serviços disponíveis
-const SERVICES = {
-    'llc-usa': {
-        id: 'llc-usa',
-        name: 'LLC EUA Completa',
-        price: 2997.00,
-        description: 'Abertura de LLC nos Estados Unidos com EIN, conta bancária Mercury e endereço comercial. Processo 100% online e documentado.',
-        features: [
-            'Registro oficial da LLC em Delaware ou Wyoming',
-            'EIN (Employer Identification Number)',
-            'Conta bancária Mercury aprovada',
-            'Endereço comercial nos EUA por 1 ano',
-            'Operating Agreement profissional',
-            'Suporte completo durante 90 dias'
-        ],
-        deliveryTime: '15-30 dias úteis'
-    },
-    'tiktok-shop': {
-        id: 'tiktok-shop',
-        name: 'TikTok Shop BR Verificada',
-        price: 497.00,
-        description: 'Conta TikTok Shop Brasil 100% verificada e pronta para vender. Inclui configuração completa e tutorial de uso.',
-        features: [
-            'Conta verificada e ativa',
-            'Configuração completa de loja',
-            'Tutorial de integração com produtos',
-            'Suporte para primeiras vendas',
-            'Garantia de 30 dias'
-        ],
-        deliveryTime: '24-48 horas'
-    },
-    'bm-250': {
-        id: 'bm-250',
-        name: 'Business Manager 250',
-        price: 197.00,
-        description: 'Facebook Business Manager com limite de R$ 250/dia para anúncios. Ideal para começar campanhas.',
-        features: [
-            'Limite inicial de R$ 250/dia',
-            'Página do Facebook incluída',
-            'Pixel configurado e instalado',
-            'Tutorial de uso completo',
-            'Suporte de 15 dias'
-        ],
-        deliveryTime: '12-24 horas'
-    },
-    'bm-unlimited': {
-        id: 'bm-unlimited',
-        name: 'Business Manager Unlimited',
-        price: 997.00,
-        description: 'Business Manager sem limite de gastos em anúncios. Para operações de grande escala.',
-        features: [
-            'Sem limite de gastos diários',
-            'Múltiplas páginas e pixels',
-            'Histórico de gastos estabelecido',
-            'Conta aquecida e estável',
-            'Suporte prioritário 30 dias'
-        ],
-        deliveryTime: '24-72 horas'
-    },
-    'google-ads': {
-        id: 'google-ads',
-        name: 'Google Ads Desbloqueada',
-        price: 397.00,
-        description: 'Conta Google Ads 100% funcional, desbloqueada e pronta para campanhas ilimitadas.',
-        features: [
-            'Conta desbloqueada e verificada',
-            'Sem restrições de gastos',
-            'Histórico limpo',
-            'Tutorial de configuração',
-            'Garantia de 15 dias'
-        ],
-        deliveryTime: '24-48 horas'
-    },
-    'stripe': {
-        id: 'stripe',
-        name: 'Conta Stripe Verificada',
-        price: 697.00,
-        description: 'Conta Stripe 100% verificada para receber pagamentos internacionais. Aprovação garantida.',
-        features: [
-            'Conta totalmente verificada',
-            'Recebimento internacional habilitado',
-            'Sem limite de transações',
-            'Documentação completa fornecida',
-            'Suporte de integração 30 dias'
-        ],
-        deliveryTime: '2-5 dias úteis'
-    }
-};
+// ==================== USUÁRIOS ====================
 
-// API: Listar serviços
-router.get('/api/services', () => {
-    return jsonResponse({ services: Object.values(SERVICES) });
-});
-
-// API: Criar pagamento PIX
-router.post('/api/checkout', async (request) => {
+// Registrar usuário (simplificado - sem senha por segurança)
+router.post('/api/users/register', async (request) => {
     try {
-        const { serviceId, customer } = await request.json();
+        const { name, email, phone } = await request.json();
 
-        if (!SERVICES[serviceId]) {
-            return jsonResponse({ error: 'Serviço não encontrado' }, 404);
+        if (!name || !email) {
+            return jsonResponse({ error: 'Nome e email obrigatórios' }, 400);
         }
 
-        const service = SERVICES[serviceId];
+        // Verificar se usuário existe
+        const existingUser = await request.env.USERS_KV.get(`user:email:${email}`);
+        if (existingUser) {
+            return jsonResponse({ error: 'Email já cadastrado' }, 400);
+        }
+
+        // Criar usuário
+        const userId = crypto.randomUUID();
+        const user = {
+            id: userId,
+            name,
+            email,
+            phone,
+            credits: 0,
+            createdAt: new Date().toISOString(),
+        };
+
+        await request.env.USERS_KV.put(`user:${userId}`, JSON.stringify(user));
+        await request.env.USERS_KV.put(`user:email:${email}`, userId);
+
+        return jsonResponse({ user }, 201);
+    } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
+// Obter usuário
+router.get('/api/users/:userId', async (request) => {
+    try {
+        const { userId } = request.params;
+        const userData = await request.env.USERS_KV.get(`user:${userId}`);
+
+        if (!userData) {
+            return jsonResponse({ error: 'Usuário não encontrado' }, 404);
+        }
+
+        return jsonResponse({ user: JSON.parse(userData) });
+    } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
+// ==================== SERVIÇOS ====================
+
+// Listar todos os serviços
+router.get('/api/services', () => {
+    const services = Object.values(ALL_SERVICES);
+    return jsonResponse({ services });
+});
+
+// Listar por categoria
+router.get('/api/services/category/:category', (request) => {
+    const { category } = request.params;
+    const services = Object.values(ALL_SERVICES).filter(s => s.category === category);
+    return jsonResponse({ services });
+});
+
+// Detalhes de um serviço
+router.get('/api/services/:serviceId', (request) => {
+    const { serviceId } = request.params;
+    const service = ALL_SERVICES[serviceId];
+
+    if (!service) {
+        return jsonResponse({ error: 'Serviço não encontrado' }, 404);
+    }
+
+    return jsonResponse({ service });
+});
+
+// ==================== PACOTES DE CRÉDITOS ====================
+
+// Listar pacotes
+router.get('/api/credits/packages', () => {
+    const packages = Object.values(CREDIT_PACKAGES);
+    return jsonResponse({ packages });
+});
+
+// Comprar créditos via PIX
+router.post('/api/credits/purchase', async (request) => {
+    try {
+        const { userId, packageId, customer } = await request.json();
+
+        const package = CREDIT_PACKAGES[packageId];
+        if (!package) {
+            return jsonResponse({ error: 'Pacote não encontrado' }, 404);
+        }
 
         // Criar cliente no Asaas
         const asaasCustomer = await createAsaasCustomer(request.env.ASAAS_API_KEY, {
@@ -143,31 +135,31 @@ router.post('/api/checkout', async (request) => {
         const payment = await createAsaasPayment(request.env.ASAAS_API_KEY, {
             customer: asaasCustomer.id,
             billingType: 'PIX',
-            value: service.price,
+            value: package.price,
             dueDate: new Date().toISOString().split('T')[0],
-            description: `${service.name} - Malu Digital Services`,
-            externalReference: `${serviceId}-${Date.now()}`,
+            description: `Pacote ${package.name} - ${package.credits} créditos`,
+            externalReference: `credits-${userId}-${Date.now()}`,
         });
 
-        // Salvar pedido no KV
-        const orderId = crypto.randomUUID();
-        const order = {
-            id: orderId,
-            serviceId,
-            serviceName: service.name,
-            price: service.price,
-            customer,
+        // Salvar transação pendente
+        const transactionId = crypto.randomUUID();
+        const transaction = {
+            id: transactionId,
+            userId,
+            packageId,
+            credits: package.credits,
+            price: package.price,
             asaasPaymentId: payment.id,
             asaasCustomerId: asaasCustomer.id,
             status: 'PENDING',
             createdAt: new Date().toISOString(),
         };
 
-        await request.env.ORDERS_KV.put(`order:${orderId}`, JSON.stringify(order));
-        await request.env.ORDERS_KV.put(`payment:${payment.id}`, orderId);
+        await request.env.ORDERS_KV.put(`credit-transaction:${transactionId}`, JSON.stringify(transaction));
+        await request.env.ORDERS_KV.put(`payment:${payment.id}`, transactionId);
 
         return jsonResponse({
-            orderId,
+            transactionId,
             paymentId: payment.id,
             pixCode: payment.encodedImage || payment.payload,
             pixQrCode: payment.encodedImage,
@@ -175,27 +167,56 @@ router.post('/api/checkout', async (request) => {
         });
 
     } catch (error) {
-        console.error('Checkout error:', error);
-        return jsonResponse({ error: error.message || 'Erro ao processar pagamento' }, 500);
+        console.error('Credits purchase error:', error);
+        return jsonResponse({ error: error.message }, 500);
     }
 });
 
-// API: Verificar status do pagamento
-router.get('/api/payment/:paymentId/status', async (request) => {
+// Verificar saldo
+router.get('/api/credits/balance/:userId', async (request) => {
+    try {
+        const { userId } = request.params;
+        const userData = await request.env.USERS_KV.get(`user:${userId}`);
+
+        if (!userData) {
+            return jsonResponse({ error: 'Usuário não encontrado' }, 404);
+        }
+
+        const user = JSON.parse(userData);
+        return jsonResponse({ balance: user.credits || 0 });
+    } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
+// Verificar status do pagamento de créditos
+router.get('/api/credits/payment/:paymentId/status', async (request) => {
     try {
         const { paymentId } = request.params;
 
         const payment = await getAsaasPaymentStatus(request.env.ASAAS_API_KEY, paymentId);
 
-        // Atualizar pedido se pago
-        const orderId = await request.env.ORDERS_KV.get(`payment:${paymentId}`);
-        if (orderId && payment.status === 'CONFIRMED') {
-            const orderData = await request.env.ORDERS_KV.get(`order:${orderId}`);
-            if (orderData) {
-                const order = JSON.parse(orderData);
-                order.status = 'PAID';
-                order.paidAt = new Date().toISOString();
-                await request.env.ORDERS_KV.put(`order:${orderId}`, JSON.stringify(order));
+        // Atualizar transação se pago
+        const transactionId = await request.env.ORDERS_KV.get(`payment:${paymentId}`);
+        if (transactionId && payment.status === 'CONFIRMED') {
+            const transactionData = await request.env.ORDERS_KV.get(`credit-transaction:${transactionId}`);
+            if (transactionData) {
+                const transaction = JSON.parse(transactionData);
+
+                if (transaction.status === 'PENDING') {
+                    // Atualizar transação
+                    transaction.status = 'CONFIRMED';
+                    transaction.confirmedAt = new Date().toISOString();
+                    await request.env.ORDERS_KV.put(`credit-transaction:${transactionId}`, JSON.stringify(transaction));
+
+                    // Adicionar créditos ao usuário
+                    const userData = await request.env.USERS_KV.get(`user:${transaction.userId}`);
+                    if (userData) {
+                        const user = JSON.parse(userData);
+                        user.credits = (user.credits || 0) + transaction.credits;
+                        await request.env.USERS_KV.put(`user:${transaction.userId}`, JSON.stringify(user));
+                    }
+                }
             }
         }
 
@@ -210,25 +231,165 @@ router.get('/api/payment/:paymentId/status', async (request) => {
     }
 });
 
-// Webhook Asaas
+// ==================== PEDIDOS DE SERVIÇOS ====================
+
+// Criar pedido (debita créditos)
+router.post('/api/orders', async (request) => {
+    try {
+        const { userId, serviceId, formData, files } = await request.json();
+
+        const service = ALL_SERVICES[serviceId];
+        if (!service) {
+            return jsonResponse({ error: 'Serviço não encontrado' }, 404);
+        }
+
+        // Verificar saldo
+        const userData = await request.env.USERS_KV.get(`user:${userId}`);
+        if (!userData) {
+            return jsonResponse({ error: 'Usuário não encontrado' }, 404);
+        }
+
+        const user = JSON.parse(userData);
+        if ((user.credits || 0) < service.credits) {
+            return jsonResponse({
+                error: 'Créditos insuficientes',
+                required: service.credits,
+                available: user.credits || 0,
+            }, 400);
+        }
+
+        // Debitar créditos
+        user.credits -= service.credits;
+        await request.env.USERS_KV.put(`user:${userId}`, JSON.stringify(user));
+
+        // Criar pedido
+        const orderId = crypto.randomUUID();
+        const order = {
+            id: orderId,
+            userId,
+            serviceId,
+            serviceName: service.name,
+            creditsUsed: service.credits,
+            formData,
+            files,
+            status: 'PENDING',
+            createdAt: new Date().toISOString(),
+            updates: [],
+        };
+
+        await request.env.ORDERS_KV.put(`order:${orderId}`, JSON.stringify(order));
+
+        // Adicionar à lista de pedidos do usuário
+        const userOrdersKey = `user-orders:${userId}`;
+        const userOrdersData = await request.env.ORDERS_KV.get(userOrdersKey);
+        const userOrders = userOrdersData ? JSON.parse(userOrdersData) : [];
+        userOrders.push(orderId);
+        await request.env.ORDERS_KV.put(userOrdersKey, JSON.stringify(userOrders));
+
+        return jsonResponse({
+            order: {
+                id: orderId,
+                serviceName: service.name,
+                creditsUsed: service.credits,
+                status: 'PENDING',
+                estimatedDelivery: service.deliveryTime,
+            },
+            newBalance: user.credits,
+        }, 201);
+
+    } catch (error) {
+        console.error('Order creation error:', error);
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
+// Listar pedidos do usuário
+router.get('/api/orders/user/:userId', async (request) => {
+    try {
+        const { userId } = request.params;
+
+        const userOrdersKey = `user-orders:${userId}`;
+        const userOrdersData = await request.env.ORDERS_KV.get(userOrdersKey);
+        const orderIds = userOrdersData ? JSON.parse(userOrdersData) : [];
+
+        const orders = [];
+        for (const orderId of orderIds) {
+            const orderData = await request.env.ORDERS_KV.get(`order:${orderId}`);
+            if (orderData) {
+                const order = JSON.parse(orderData);
+                // Não enviar dados sensíveis do formulário
+                orders.push({
+                    id: order.id,
+                    serviceName: order.serviceName,
+                    creditsUsed: order.creditsUsed,
+                    status: order.status,
+                    createdAt: order.createdAt,
+                    updates: order.updates || [],
+                });
+            }
+        }
+
+        orders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        return jsonResponse({ orders });
+    } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
+// Detalhes do pedido
+router.get('/api/orders/:orderId', async (request) => {
+    try {
+        const { orderId } = request.params;
+        const userId = request.headers.get('X-User-ID');
+
+        const orderData = await request.env.ORDERS_KV.get(`order:${orderId}`);
+        if (!orderData) {
+            return jsonResponse({ error: 'Pedido não encontrado' }, 404);
+        }
+
+        const order = JSON.parse(orderData);
+
+        // Verificar se é o dono
+        if (order.userId !== userId) {
+            return jsonResponse({ error: 'Não autorizado' }, 403);
+        }
+
+        return jsonResponse({ order });
+    } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
+// ==================== WEBHOOK ASAAS ====================
+
 router.post('/api/webhook/asaas', async (request) => {
     try {
         const event = await request.json();
 
         if (event.event === 'PAYMENT_CONFIRMED') {
             const paymentId = event.payment.id;
-            const orderId = await request.env.ORDERS_KV.get(`payment:${paymentId}`);
+            const transactionId = await request.env.ORDERS_KV.get(`payment:${paymentId}`);
 
-            if (orderId) {
-                const orderData = await request.env.ORDERS_KV.get(`order:${orderId}`);
-                if (orderData) {
-                    const order = JSON.parse(orderData);
-                    order.status = 'PAID';
-                    order.paidAt = new Date().toISOString();
-                    await request.env.ORDERS_KV.put(`order:${orderId}`, JSON.stringify(order));
+            if (transactionId) {
+                const transactionData = await request.env.ORDERS_KV.get(`credit-transaction:${transactionId}`);
+                if (transactionData) {
+                    const transaction = JSON.parse(transactionData);
 
-                    // Aqui você pode enviar email, notificação, etc
-                    console.log(`Pedido ${orderId} pago com sucesso!`);
+                    if (transaction.status === 'PENDING') {
+                        // Confirmar transação
+                        transaction.status = 'CONFIRMED';
+                        transaction.confirmedAt = new Date().toISOString();
+                        await request.env.ORDERS_KV.put(`credit-transaction:${transactionId}`, JSON.stringify(transaction));
+
+                        // Adicionar créditos
+                        const userData = await request.env.USERS_KV.get(`user:${transaction.userId}`);
+                        if (userData) {
+                            const user = JSON.parse(userData);
+                            user.credits = (user.credits || 0) + transaction.credits;
+                            await request.env.USERS_KV.put(`user:${transaction.userId}`, JSON.stringify(user));
+                        }
+                    }
                 }
             }
         }
@@ -240,23 +401,29 @@ router.post('/api/webhook/asaas', async (request) => {
     }
 });
 
-// Health check
+// ==================== HEALTH CHECK ====================
+
 router.get('/api/health', () => {
     return jsonResponse({
         status: 'ok',
-        version: '3.0-pro-asaas-pix',
-        timestamp: new Date().toISOString()
+        version: '4.0-complete-19-services',
+        timestamp: new Date().toISOString(),
+        services: Object.keys(ALL_SERVICES).length,
+        packages: Object.keys(CREDIT_PACKAGES).length,
     });
 });
 
-// Página principal
+// ==================== FRONTEND ====================
+
 router.get('/', async (request, env, ctx) => {
-    return new Response(getIndexHTML(), {
-        headers: { 'Content-Type': 'text/html;charset=UTF-8', ...corsHeaders },
+    // TODO: Retornar HTML do frontend completo
+    return new Response('Frontend em desenvolvimento...', {
+        headers: { 'Content-Type': 'text/html', ...corsHeaders },
     });
 });
 
-// Static assets
+// ==================== STATIC ASSETS ====================
+
 router.get('*', async (request, env, ctx) => {
     if (env.__STATIC_CONTENT) {
         try {
@@ -280,7 +447,8 @@ router.get('*', async (request, env, ctx) => {
 // 404
 router.all('*', () => jsonResponse({ error: 'Not Found' }, 404));
 
-// Main handler
+// ==================== MAIN HANDLER ====================
+
 export default {
     async fetch(request, env, ctx) {
         try {
