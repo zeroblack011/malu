@@ -7,6 +7,7 @@ import { Router } from 'itty-router';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
 import { createAsaasCustomer, createAsaasPayment, getAsaasPaymentStatus } from './utils/asaas';
 import { ALL_SERVICES, CREDIT_PACKAGES } from './services-complete';
+import { HTML } from './frontend-assets';
 
 const router = Router();
 
@@ -415,10 +416,43 @@ router.get('/api/health', () => {
 
 // ==================== STATIC ASSETS ====================
 
+// Serve static CSS
+router.get('/styles.css', async (request, env, ctx) => {
+    try {
+        if (env.__STATIC_CONTENT) {
+            return await getAssetFromKV({ request, waitUntil: ctx.waitUntil.bind(ctx) }, {
+                ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                ASSET_MANIFEST: typeof __STATIC_CONTENT_MANIFEST !== 'undefined' ? JSON.parse(__STATIC_CONTENT_MANIFEST) : {},
+            });
+        }
+    } catch (e) {
+        // Fallback - serve from public folder if Workers Sites fails
+        console.error('CSS load error:', e);
+    }
+    return new Response('/* CSS not loaded */', { headers: { 'Content-Type': 'text/css' } });
+});
+
+// Serve static JS
+router.get('/app.js', async (request, env, ctx) => {
+    try {
+        if (env.__STATIC_CONTENT) {
+            return await getAssetFromKV({ request, waitUntil: ctx.waitUntil.bind(ctx) }, {
+                ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                ASSET_MANIFEST: typeof __STATIC_CONTENT_MANIFEST !== 'undefined' ? JSON.parse(__STATIC_CONTENT_MANIFEST) : {},
+            });
+        }
+    } catch (e) {
+        console.error('JS load error:', e);
+    }
+    return new Response('// JS not loaded', { headers: { 'Content-Type': 'application/javascript' } });
+});
+
 // Catch-all for static files and SPA routing
 router.get('*', async (request, env, ctx) => {
+    const url = new URL(request.url);
+
+    // Try Workers Sites first
     try {
-        // Try to serve static asset
         if (env.__STATIC_CONTENT) {
             return await getAssetFromKV(
                 { request, waitUntil: ctx.waitUntil.bind(ctx) },
@@ -431,7 +465,18 @@ router.get('*', async (request, env, ctx) => {
             );
         }
     } catch (e) {
-        // If asset not found, try to serve index.html for SPA routing
+        // If Workers Sites fails, serve inline HTML for root path
+        if (url.pathname === '/' || url.pathname === '/index.html') {
+            console.log('Serving inline HTML fallback');
+            return new Response(HTML, {
+                headers: {
+                    'Content-Type': 'text/html;charset=UTF-8',
+                    ...corsHeaders
+                }
+            });
+        }
+
+        // Try to serve index.html for SPA routing
         try {
             if (env.__STATIC_CONTENT) {
                 const indexRequest = new Request(new URL('/index.html', request.url), request);
@@ -446,7 +491,14 @@ router.get('*', async (request, env, ctx) => {
                 );
             }
         } catch (indexError) {
-            console.error('Failed to serve index.html:', indexError);
+            // Final fallback - serve inline HTML
+            console.log('Serving inline HTML as final fallback');
+            return new Response(HTML, {
+                headers: {
+                    'Content-Type': 'text/html;charset=UTF-8',
+                    ...corsHeaders
+                }
+            });
         }
     }
 
