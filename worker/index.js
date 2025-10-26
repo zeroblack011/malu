@@ -79,6 +79,28 @@ router.get('/api/users/:userId', async (request) => {
     }
 });
 
+// Login por email (sem senha)
+router.get('/api/users/email/:email', async (request) => {
+    try {
+        const { email } = request.params;
+        const userId = await request.env.USERS_KV.get(`user:email:${email}`);
+
+        if (!userId) {
+            return jsonResponse({ error: 'Usuário não encontrado' }, 404);
+        }
+
+        const userData = await request.env.USERS_KV.get(`user:${userId}`);
+
+        if (!userData) {
+            return jsonResponse({ error: 'Usuário não encontrado' }, 404);
+        }
+
+        return jsonResponse({ user: JSON.parse(userData) });
+    } catch (error) {
+        return jsonResponse({ error: error.message }, 500);
+    }
+});
+
 // ==================== SERVIÇOS ====================
 
 // Listar todos os serviços

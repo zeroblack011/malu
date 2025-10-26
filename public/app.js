@@ -1,35 +1,934 @@
-// ==================== GLOBAL STATE ====================
-const APP = {
-    currentUser: null,
-    services: [],
-    creditPackages: [],
-    orders: [],
-    currentView: 'home'
+// ============================================================================
+// GLOBAL STATE
+// ============================================================================
+let currentUser = null;
+let allServices = [];
+let allPackages = [];
+let selectedService = null;
+let selectedPackage = null;
+let pendingAction = null; // Stores action to execute after login
+let currentPaymentId = null;
+let paymentCheckInterval = null;
+
+// ============================================================================
+// INITIALIZATION
+// ============================================================================
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('App initializing...');
+
+    // Load user from localStorage
+    loadUserFromStorage();
+
+    // Setup event listeners
+    setupEventListeners();
+
+    // Load initial data
+    await loadInitialData();
+
+    // Update UI based on auth state
+    updateAuthUI();
+
+    console.log('App initialized successfully');
+});
+
+// ============================================================================
+// DATA LOADING
+// ============================================================================
+async function loadInitialData() {
+    showLoading();
+    try {
+        // Load services and packages in parallel
+        const [servicesResponse, packagesResponse] = await Promise.all([
+            fetch('/api/services'),
+            fetch('/api/credits/packages')
+        ]);
+
+        if (!servicesResponse.ok) {
+            throw new Error('Failed to load services');
+        }
+        if (!packagesResponse.ok) {
+            throw new Error('Failed to load credit packages');
+        }
+
+        allServices = await servicesResponse.json();
+        allPackages = await packagesResponse.json();
+
+        console.log(`Loaded ${allServices.length} services and ${allPackages.length} packages`);
+
+        // Render services and packages
+        renderServices(allServices);
+        renderCreditPackages(allPackages);
+
+    } catch (error) {
+        console.error('Error loading initial data:', error);
+        showToast('Erro ao carregar dados. Por favor, recarregue a pÃ¡gina.', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+async function refreshUserData() {
+    if (!currentUser || !currentUser.id) return;
+
+    try {
+        const response = await fetch(`/api/users/${currentUser.id}`);
+        if (response.ok) {
+            const userData = await response.json();
+            currentUser = userData;
+            saveUserToStorage(currentUser);
+            updateAuthUI();
+        }
+    } catch (error) {
+        console.error('Error refreshing user data:', error);
+    }
+}
+
+// ============================================================================
+// SERVICES RENDERING
+// ============================================================================
+function renderServices(services) {
+    const servicesList = document.getElementById('servicesList');
+    if (!servicesList) return;
+
+    servicesList.innerHTML = '';
+
+    if (services.length === 0) {
+        servicesList.innerHTML = '<div class="col-12"><p class="text-center text-muted">Nenhum serviÃ§o encontrado.</p></div>';
+        return;
+    }
+
+    services.forEach(service => {
+        const serviceCard = createServiceCard(service);
+        servicesList.appendChild(serviceCard);
+    });
+}
+
+function createServiceCard(service) {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 col-lg-4';
+
+    const categoryColors = {
+        'DocumentaÃ§Ã£o': 'primary',
+        'BenefÃ­cios': 'success',
+        'Financeiro': 'warning',
+        'Propriedade': 'info',
+        'Outros': 'secondary'
+    };
+
+    const badgeColor = categoryColors[service.category] || 'secondary';
+
+    col.innerHTML = `
+        <div class="service-card" data-service-id="${service.id}">
+            <div class="service-icon">
+                <i class="${service.icon}"></i>
+            </div>
+            <h5 class="service-title">${service.name}</h5>
+            <span class="badge bg-${badgeColor} mb-2">${service.category}</span>
+            <p class="service-description">${service.description}</p>
+            <div class="service-footer">
+                <span class="service-credits">${formatCredits(service.creditCost)} crÃ©ditos</span>
+                <button class="btn btn-sm btn-primary" onclick="openServiceModal(${service.id})">
+                    Contratar
+                </button>
+            </div>
+        </div>
+    `;
+
+    return col;
+}
+
+function filterServices(category) {
+    // Update active filter button
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(btn => {
+        if (btn.dataset.category === category) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    // Filter and render
+    if (category === 'all') {
+        renderServices(allServices);
+    } else {
+        const filtered = allServices.filter(s => s.category === category);
+        renderServices(filtered);
+    }
+}
+
+// ============================================================================
+// CREDIT PACKAGES RENDERING
+// ============================================================================
+function renderCreditPackages(packages) {
+    const container = document.getElementById('creditPackages');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (packages.length === 0) {
+        container.innerHTML = '<div class="col-12"><p class="text-center text-muted">Nenhum pacote disponÃ­vel.</p></div>';
+        return;
+    }
+
+    packages.forEach(pkg => {
+        const packageCard = createPackageCard(pkg);
+        container.appendChild(packageCard);
+    });
+}
+
+function createPackageCard(pkg) {
+    const col = document.createElement('div');
+    col.className = 'col-md-6 col-lg-3';
+
+    const isPopular = pkg.credits >= 50 && pkg.credits <= 100;
+
+    col.innerHTML = `
+        <div class="credit-package ${isPopular ? 'popular' : ''}">
+            ${isPopular ? '<div class="popular-badge">Mais Popular</div>' : ''}
+            <div class="package-credits">${formatCredits(pkg.credits)}</div>
+            <div class="package-price">${formatCurrency(pkg.price)}</div>
+            ${pkg.bonusCredits > 0 ? `<div class="package-bonus">+ ${pkg.bonusCredits} bÃ´nus</div>` : ''}
+            <button class="btn btn-primary w-100 mt-3" onclick="buyCredits(${pkg.id})">
+                Comprar
+            </button>
+        </div>
+    `;
+
+    return col;
+}
+
+// ============================================================================
+// SERVICE MODAL
+// ============================================================================
+window.openServiceModal = function(serviceId) {
+    selectedService = allServices.find(s => s.id === serviceId);
+    if (!selectedService) {
+        showToast('ServiÃ§o nÃ£o encontrado', 'error');
+        return;
+    }
+
+    // Check if user is logged in
+    if (!currentUser) {
+        // Store the action to execute after login
+        pendingAction = () => openServiceModal(serviceId);
+        openModal('authModal');
+        return;
+    }
+
+    // User is logged in, show service modal
+    renderServiceModal(selectedService);
+    openModal('serviceModal');
 };
 
-// ==================== API BASE ====================
-const API_BASE = window.location.origin;
+function renderServiceModal(service) {
+    const modal = document.getElementById('serviceModal');
+    if (!modal) return;
 
-// ==================== UTILITY FUNCTIONS ====================
+    const hasEnoughCredits = currentUser && currentUser.credits >= service.creditCost;
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="${service.icon} me-2"></i>
+                    ${service.name}
+                </h5>
+                <button type="button" class="btn-close" onclick="closeModal('serviceModal')"></button>
+            </div>
+            <div class="modal-body">
+                <div class="service-details">
+                    <p class="text-muted">${service.description}</p>
+                    <div class="alert alert-info">
+                        <strong>Custo:</strong> ${formatCredits(service.creditCost)} crÃ©ditos
+                    </div>
+
+                    ${currentUser ? `
+                        <div class="alert ${hasEnoughCredits ? 'alert-success' : 'alert-warning'}">
+                            <strong>Seus crÃ©ditos:</strong> ${formatCredits(currentUser.credits)}
+                        </div>
+                    ` : ''}
+
+                    ${!hasEnoughCredits && currentUser ? `
+                        <div class="alert alert-danger">
+                            VocÃª nÃ£o tem crÃ©ditos suficientes. Compre mais crÃ©ditos para contratar este serviÃ§o.
+                        </div>
+                        <button class="btn btn-warning w-100 mb-3" onclick="closeModal('serviceModal'); scrollToCredits()">
+                            Comprar CrÃ©ditos
+                        </button>
+                    ` : ''}
+
+                    ${hasEnoughCredits ? `
+                        <form id="serviceForm" onsubmit="submitServiceOrder(event)">
+                            <h6 class="mb-3">Preencha os dados necessÃ¡rios:</h6>
+                            ${renderServiceFields(service.requiredFields)}
+                            <button type="submit" class="btn btn-primary w-100">
+                                Contratar ServiÃ§o
+                            </button>
+                        </form>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderServiceFields(fields) {
+    if (!fields || fields.length === 0) {
+        return '<p class="text-muted">Nenhum dado adicional necessÃ¡rio.</p>';
+    }
+
+    return fields.map(field => {
+        const fieldType = field.type || 'text';
+        const required = field.required ? 'required' : '';
+
+        if (fieldType === 'select' && field.options) {
+            return `
+                <div class="mb-3">
+                    <label class="form-label">${field.label}</label>
+                    <select class="form-select" name="${field.name}" ${required}>
+                        <option value="">Selecione...</option>
+                        ${field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        } else if (fieldType === 'textarea') {
+            return `
+                <div class="mb-3">
+                    <label class="form-label">${field.label}</label>
+                    <textarea class="form-control" name="${field.name}" rows="3" ${required}></textarea>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="mb-3">
+                    <label class="form-label">${field.label}</label>
+                    <input type="${fieldType}" class="form-control" name="${field.name}" ${required}>
+                </div>
+            `;
+        }
+    }).join('');
+}
+
+window.submitServiceOrder = async function(event) {
+    event.preventDefault();
+
+    if (!currentUser || !selectedService) {
+        showToast('Erro: usuÃ¡rio ou serviÃ§o nÃ£o encontrado', 'error');
+        return;
+    }
+
+    if (currentUser.credits < selectedService.creditCost) {
+        showToast('CrÃ©ditos insuficientes', 'error');
+        return;
+    }
+
+    const form = event.target;
+    const formData = new FormData(form);
+    const serviceData = {};
+
+    formData.forEach((value, key) => {
+        serviceData[key] = value;
+    });
+
+    showLoading();
+
+    try {
+        const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: currentUser.id,
+                serviceId: selectedService.id,
+                serviceData: serviceData
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erro ao criar pedido');
+        }
+
+        const order = await response.json();
+
+        showToast('Pedido criado com sucesso!', 'success');
+        closeModal('serviceModal');
+
+        // Refresh user data to update credits
+        await refreshUserData();
+
+        // Show success message with order details
+        setTimeout(() => {
+            showToast(`Pedido #${order.id} em processamento`, 'info');
+        }, 500);
+
+    } catch (error) {
+        console.error('Error creating order:', error);
+        showToast(error.message || 'Erro ao criar pedido', 'error');
+    } finally {
+        hideLoading();
+    }
+};
+
+// ============================================================================
+// CREDIT PURCHASE
+// ============================================================================
+window.buyCredits = function(packageId) {
+    selectedPackage = allPackages.find(p => p.id === packageId);
+    if (!selectedPackage) {
+        showToast('Pacote nÃ£o encontrado', 'error');
+        return;
+    }
+
+    // Check if user is logged in
+    if (!currentUser) {
+        // Store the action to execute after login
+        pendingAction = () => buyCredits(packageId);
+        openModal('authModal');
+        return;
+    }
+
+    // User is logged in, proceed with purchase
+    processCreditPurchase(selectedPackage);
+};
+
+async function processCreditPurchase(pkg) {
+    showLoading();
+
+    try {
+        const response = await fetch('/api/credits/purchase', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                userId: currentUser.id,
+                packageId: pkg.id
+            })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erro ao processar compra');
+        }
+
+        const payment = await response.json();
+        currentPaymentId = payment.id;
+
+        // Show PIX modal with payment details
+        showPixModal(payment);
+
+        // Start polling for payment status
+        startPaymentStatusCheck(payment.id);
+
+    } catch (error) {
+        console.error('Error processing credit purchase:', error);
+        showToast(error.message || 'Erro ao processar compra', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+function showPixModal(payment) {
+    const modal = document.getElementById('pixModal');
+    if (!modal) return;
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Pagamento PIX</h5>
+                <button type="button" class="btn-close" onclick="closePixModal()"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div class="alert alert-info">
+                    <strong>Valor:</strong> ${formatCurrency(payment.amount)}
+                </div>
+
+                <div class="qr-code-container mb-3">
+                    <img src="${payment.qrCodeImage}" alt="QR Code PIX" class="img-fluid" style="max-width: 300px;">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">CÃ³digo PIX Copia e Cola:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="pixCode" value="${payment.qrCode}" readonly>
+                        <button class="btn btn-outline-secondary" onclick="copyPixCode()">
+                            <i class="fas fa-copy"></i> Copiar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="alert alert-warning">
+                    <i class="fas fa-clock me-2"></i>
+                    Aguardando confirmaÃ§Ã£o do pagamento...
+                </div>
+
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Verificando pagamento...</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    openModal('pixModal');
+}
+
+window.copyPixCode = function() {
+    const pixCodeInput = document.getElementById('pixCode');
+    if (pixCodeInput) {
+        pixCodeInput.select();
+        document.execCommand('copy');
+        showToast('CÃ³digo PIX copiado!', 'success');
+    }
+};
+
+window.closePixModal = function() {
+    stopPaymentStatusCheck();
+    closeModal('pixModal');
+    currentPaymentId = null;
+};
+
+function startPaymentStatusCheck(paymentId) {
+    // Clear any existing interval
+    stopPaymentStatusCheck();
+
+    // Check immediately
+    checkPaymentStatus(paymentId);
+
+    // Then check every 3 seconds
+    paymentCheckInterval = setInterval(() => {
+        checkPaymentStatus(paymentId);
+    }, 3000);
+}
+
+function stopPaymentStatusCheck() {
+    if (paymentCheckInterval) {
+        clearInterval(paymentCheckInterval);
+        paymentCheckInterval = null;
+    }
+}
+
+async function checkPaymentStatus(paymentId) {
+    try {
+        const response = await fetch(`/api/credits/payment/${paymentId}/status`);
+        if (!response.ok) return;
+
+        const payment = await response.json();
+
+        if (payment.status === 'approved') {
+            stopPaymentStatusCheck();
+            closeModal('pixModal');
+            showToast('Pagamento confirmado! CrÃ©ditos adicionados Ã  sua conta.', 'success');
+            await refreshUserData();
+        } else if (payment.status === 'cancelled' || payment.status === 'rejected') {
+            stopPaymentStatusCheck();
+            closeModal('pixModal');
+            showToast('Pagamento nÃ£o confirmado. Tente novamente.', 'error');
+        }
+    } catch (error) {
+        console.error('Error checking payment status:', error);
+    }
+}
+
+// ============================================================================
+// AUTHENTICATION
+// ============================================================================
+window.showLogin = function() {
+    document.getElementById('registerForm')?.classList.add('d-none');
+    document.getElementById('loginForm')?.classList.remove('d-none');
+};
+
+window.showRegister = function() {
+    document.getElementById('loginForm')?.classList.add('d-none');
+    document.getElementById('registerForm')?.classList.remove('d-none');
+};
+
+window.submitLogin = async function(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const email = form.querySelector('input[name="email"]').value.trim();
+
+    if (!email) {
+        showToast('Por favor, informe seu email', 'error');
+        return;
+    }
+
+    showLoading();
+
+    try {
+        const response = await fetch(`/api/users/email/${encodeURIComponent(email)}`);
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                showToast('UsuÃ¡rio nÃ£o encontrado. Por favor, registre-se.', 'error');
+                showRegister();
+            } else {
+                throw new Error('Erro ao fazer login');
+            }
+            return;
+        }
+
+        const user = await response.json();
+
+        // Save user and update UI
+        currentUser = user;
+        saveUserToStorage(user);
+        updateAuthUI();
+        closeModal('authModal');
+
+        showToast(`Bem-vindo, ${user.name}!`, 'success');
+
+        // Execute pending action if any
+        if (pendingAction) {
+            const action = pendingAction;
+            pendingAction = null;
+            setTimeout(() => action(), 300);
+        }
+
+        // Reset form
+        form.reset();
+
+    } catch (error) {
+        console.error('Error logging in:', error);
+        showToast(error.message || 'Erro ao fazer login', 'error');
+    } finally {
+        hideLoading();
+    }
+};
+
+window.submitRegister = async function(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const name = form.querySelector('input[name="name"]').value.trim();
+    const email = form.querySelector('input[name="email"]').value.trim();
+    const phone = form.querySelector('input[name="phone"]').value.trim();
+
+    if (!name || !email || !phone) {
+        showToast('Por favor, preencha todos os campos', 'error');
+        return;
+    }
+
+    showLoading();
+
+    try {
+        const response = await fetch('/api/users/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name, email, phone })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Erro ao registrar');
+        }
+
+        const user = await response.json();
+
+        // Save user and update UI
+        currentUser = user;
+        saveUserToStorage(user);
+        updateAuthUI();
+        closeModal('authModal');
+
+        showToast(`Bem-vindo, ${user.name}! VocÃª ganhou 10 crÃ©ditos de bÃ´nus!`, 'success');
+
+        // Execute pending action if any
+        if (pendingAction) {
+            const action = pendingAction;
+            pendingAction = null;
+            setTimeout(() => action(), 300);
+        }
+
+        // Reset form
+        form.reset();
+
+    } catch (error) {
+        console.error('Error registering:', error);
+        showToast(error.message || 'Erro ao registrar', 'error');
+    } finally {
+        hideLoading();
+    }
+};
+
+window.logout = function() {
+    currentUser = null;
+    localStorage.removeItem('malu_user');
+    updateAuthUI();
+    showToast('VocÃª saiu da sua conta', 'info');
+
+    // Clear any pending actions
+    pendingAction = null;
+};
+
+function loadUserFromStorage() {
+    const userJson = localStorage.getItem('malu_user');
+    if (userJson) {
+        try {
+            currentUser = JSON.parse(userJson);
+            console.log('User loaded from storage:', currentUser.email);
+            // Refresh user data from server
+            refreshUserData();
+        } catch (error) {
+            console.error('Error parsing user from storage:', error);
+            localStorage.removeItem('malu_user');
+        }
+    }
+}
+
+function saveUserToStorage(user) {
+    localStorage.setItem('malu_user', JSON.stringify(user));
+}
+
+function updateAuthUI() {
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const myOrdersBtn = document.getElementById('myOrdersBtn');
+    const userCredits = document.getElementById('userCredits');
+
+    if (currentUser) {
+        // User is logged in
+        if (loginBtn) loginBtn.classList.add('d-none');
+        if (logoutBtn) logoutBtn.classList.remove('d-none');
+        if (myOrdersBtn) myOrdersBtn.classList.remove('d-none');
+        if (userCredits) {
+            userCredits.classList.remove('d-none');
+            userCredits.textContent = `${formatCredits(currentUser.credits)} crÃ©ditos`;
+        }
+    } else {
+        // User is not logged in
+        if (loginBtn) loginBtn.classList.remove('d-none');
+        if (logoutBtn) logoutBtn.classList.add('d-none');
+        if (myOrdersBtn) myOrdersBtn.classList.add('d-none');
+        if (userCredits) userCredits.classList.add('d-none');
+    }
+}
+
+// ============================================================================
+// ORDERS
+// ============================================================================
+window.showMyOrders = async function() {
+    if (!currentUser) {
+        showToast('Por favor, faÃ§a login para ver seus pedidos', 'error');
+        openModal('authModal');
+        return;
+    }
+
+    showLoading();
+
+    try {
+        const response = await fetch(`/api/orders/user/${currentUser.id}`);
+
+        if (!response.ok) {
+            throw new Error('Erro ao carregar pedidos');
+        }
+
+        const orders = await response.json();
+        renderOrdersModal(orders);
+        openModal('ordersModal');
+
+    } catch (error) {
+        console.error('Error loading orders:', error);
+        showToast(error.message || 'Erro ao carregar pedidos', 'error');
+    } finally {
+        hideLoading();
+    }
+};
+
+function renderOrdersModal(orders) {
+    const modal = document.getElementById('ordersModal');
+    if (!modal) return;
+
+    const ordersList = orders.map(order => {
+        const service = allServices.find(s => s.id === order.serviceId);
+        const statusColors = {
+            'pending': 'warning',
+            'processing': 'info',
+            'completed': 'success',
+            'cancelled': 'danger'
+        };
+        const statusLabels = {
+            'pending': 'Pendente',
+            'processing': 'Processando',
+            'completed': 'ConcluÃ­do',
+            'cancelled': 'Cancelado'
+        };
+
+        return `
+            <div class="order-item mb-3 p-3 border rounded">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="mb-1">
+                            <i class="${service?.icon || 'fas fa-file'} me-2"></i>
+                            ${service?.name || 'ServiÃ§o'}
+                        </h6>
+                        <small class="text-muted">Pedido #${order.id}</small>
+                        <br>
+                        <small class="text-muted">Data: ${new Date(order.createdAt).toLocaleDateString('pt-BR')}</small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-${statusColors[order.status] || 'secondary'}">
+                            ${statusLabels[order.status] || order.status}
+                        </span>
+                        <br>
+                        <small class="text-muted">${formatCredits(order.creditsUsed)} crÃ©ditos</small>
+                    </div>
+                </div>
+                ${order.result ? `
+                    <div class="mt-2">
+                        <small class="text-success"><strong>Resultado:</strong> ${order.result}</small>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+
+    modal.innerHTML = `
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Meus Pedidos</h5>
+                <button type="button" class="btn-close" onclick="closeModal('ordersModal')"></button>
+            </div>
+            <div class="modal-body">
+                ${orders.length > 0 ? ordersList : '<p class="text-center text-muted">VocÃª ainda nÃ£o tem pedidos.</p>'}
+            </div>
+        </div>
+    `;
+}
+
+// ============================================================================
+// EVENT LISTENERS
+// ============================================================================
+function setupEventListeners() {
+    // Login button
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+            showLogin();
+            openModal('authModal');
+        });
+    }
+
+    // Logout button
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+
+    // My orders button
+    const myOrdersBtn = document.getElementById('myOrdersBtn');
+    if (myOrdersBtn) {
+        myOrdersBtn.addEventListener('click', showMyOrders);
+    }
+
+    // Auth modal form toggles
+    const showRegisterBtn = document.getElementById('showRegisterBtn');
+    if (showRegisterBtn) {
+        showRegisterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showRegister();
+        });
+    }
+
+    const showLoginBtn = document.getElementById('showLoginBtn');
+    if (showLoginBtn) {
+        showLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            showLogin();
+        });
+    }
+
+    // Login form
+    const loginForm = document.getElementById('loginFormElement');
+    if (loginForm) {
+        loginForm.addEventListener('submit', submitLogin);
+    }
+
+    // Register form
+    const registerForm = document.getElementById('registerFormElement');
+    if (registerForm) {
+        registerForm.addEventListener('submit', submitRegister);
+    }
+
+    // Service filter buttons
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    filterButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const category = btn.dataset.category;
+            filterServices(category);
+        });
+    });
+
+    // Close modals when clicking outside
+    window.addEventListener('click', (event) => {
+        const modals = ['authModal', 'serviceModal', 'pixModal', 'ordersModal'];
+        modals.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (modal && event.target === modal) {
+                closeModal(modalId);
+            }
+        });
+    });
+}
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 function showLoading() {
-    document.getElementById('loadingOverlay').style.display = 'flex';
+    const loader = document.getElementById('loader');
+    if (loader) {
+        loader.classList.remove('d-none');
+    }
 }
 
 function hideLoading() {
-    document.getElementById('loadingOverlay').style.display = 'none';
+    const loader = document.getElementById('loader');
+    if (loader) {
+        loader.classList.add('d-none');
+    }
 }
 
-function showToast(message, type = 'success') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `<div class="toast-message">${message}</div>`;
-    container.appendChild(toast);
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) {
+        console.warn('Toast container not found');
+        return;
+    }
 
-    setTimeout(() => {
-        toast.style.animation = 'slideIn 0.3s ease reverse';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    const toastId = 'toast-' + Date.now();
+    const bgColors = {
+        'success': 'bg-success',
+        'error': 'bg-danger',
+        'warning': 'bg-warning',
+        'info': 'bg-info'
+    };
+
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = `toast align-items-center text-white ${bgColors[type] || 'bg-info'} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+
+    toastContainer.appendChild(toast);
+
+    // Show toast
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+
+    // Remove after hidden
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
 }
 
 function formatCurrency(value) {
@@ -40,760 +939,70 @@ function formatCurrency(value) {
 }
 
 function formatCredits(value) {
-    return new Intl.NumberFormat('pt-BR').format(value);
+    return value.toLocaleString('pt-BR');
 }
 
-// ==================== NAVIGATION ====================
-function switchView(viewName) {
-    // Hide all views
-    document.querySelectorAll('.view').forEach(view => {
-        view.classList.remove('active');
-    });
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'block';
+        modal.classList.add('show');
+        document.body.classList.add('modal-open');
 
-    // Show selected view
-    const targetView = document.getElementById(`${viewName}View`);
-    if (targetView) {
-        targetView.classList.add('active');
-    }
-
-    // Update nav buttons
-    document.querySelectorAll('.nav-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (btn.dataset.view === viewName) {
-            btn.classList.add('active');
+        // Add backdrop
+        let backdrop = document.querySelector('.modal-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
         }
-    });
-
-    APP.currentView = viewName;
-
-    // Load view-specific data
-    if (viewName === 'services' && APP.services.length === 0) {
-        loadServices();
-    } else if (viewName === 'credits' && APP.creditPackages.length === 0) {
-        loadCreditPackages();
-    } else if (viewName === 'orders' && APP.currentUser) {
-        loadOrders();
     }
 }
 
-// Setup navigation event listeners
-function setupNavigation() {
-    document.querySelectorAll('[data-view]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const viewName = btn.dataset.view;
-            switchView(viewName);
-        });
-    });
-}
-
-// ==================== USER MANAGEMENT ====================
-function loadUserFromStorage() {
-    const userData = localStorage.getItem('currentUser');
-    if (userData) {
-        APP.currentUser = JSON.parse(userData);
-        updateUIForLoggedInUser();
-        return true;
-    }
-    return false;
-}
-
-function saveUserToStorage(user) {
-    localStorage.setItem('currentUser', JSON.stringify(user));
-    APP.currentUser = user;
-}
-
-function updateUIForLoggedInUser() {
-    // Hide register card, show welcome card
-    document.getElementById('registerCard').style.display = 'none';
-    document.getElementById('welcomeCard').style.display = 'block';
-
-    // Show navigation
-    document.getElementById('mainNav').style.display = 'flex';
-    document.getElementById('userInfo').style.display = 'flex';
-
-    // Update user info
-    document.getElementById('userName').textContent = APP.currentUser.name;
-    updateCreditsDisplay();
-}
-
-function updateCreditsDisplay() {
-    if (!APP.currentUser) return;
-
-    const creditsElements = [
-        document.getElementById('userCredits'),
-        document.getElementById('userCreditsWelcome')
-    ];
-
-    creditsElements.forEach(el => {
-        if (el) el.textContent = formatCredits(APP.currentUser.credits || 0);
-    });
-}
-
-async function refreshUserData() {
-    if (!APP.currentUser) return;
-
-    try {
-        const response = await fetch(`${API_BASE}/api/users/${APP.currentUser.id}`);
-        const data = await response.json();
-
-        if (data.user) {
-            saveUserToStorage(data.user);
-            updateCreditsDisplay();
-        }
-    } catch (error) {
-        console.error('Error refreshing user data:', error);
-    }
-}
-
-// ==================== USER REGISTRATION ====================
-function setupRegistration() {
-    const form = document.getElementById('registerForm');
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-
-        const name = document.getElementById('regName').value.trim();
-        const email = document.getElementById('regEmail').value.trim();
-        const phone = document.getElementById('regPhone').value.trim();
-
-        if (!name || !email || !phone) {
-            showToast('Preencha todos os campos', 'error');
-            return;
-        }
-
-        showLoading();
-
-        try {
-            const response = await fetch(`${API_BASE}/api/users/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, email, phone })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.user) {
-                saveUserToStorage(data.user);
-                updateUIForLoggedInUser();
-                showToast('Conta criada com sucesso!', 'success');
-            } else {
-                showToast(data.error || 'Erro ao criar conta', 'error');
-            }
-        } catch (error) {
-            showToast('Erro ao conectar com servidor', 'error');
-            console.error('Registration error:', error);
-        } finally {
-            hideLoading();
-        }
-    });
-}
-
-// ==================== SERVICES ====================
-async function loadServices() {
-    showLoading();
-
-    try {
-        const response = await fetch(`${API_BASE}/api/services`);
-        const data = await response.json();
-
-        if (data.services) {
-            APP.services = data.services;
-            displayServices(APP.services);
-            setupServiceFilters();
-        }
-    } catch (error) {
-        showToast('Erro ao carregar serviços', 'error');
-        console.error('Load services error:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-function displayServices(services) {
-    const container = document.getElementById('servicesList');
-
-    if (services.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>Nenhum serviço encontrado</p></div>';
-        return;
-    }
-
-    container.innerHTML = services.map(service => `
-        <div class="service-card" data-service-id="${service.id}">
-            <div class="service-header">
-                <div class="service-icon">${service.icon || 'SVC'}</div>
-                <div class="service-title-group">
-                    <div class="service-category">${service.category}</div>
-                    <div class="service-title">${service.name}</div>
-                </div>
-            </div>
-            <div class="service-description">${service.description}</div>
-            <div class="service-footer">
-                <div class="service-price">${formatCredits(service.credits)} créditos</div>
-                <div class="service-delivery">${service.deliveryTime}</div>
-            </div>
-        </div>
-    `).join('');
-
-    // Add click handlers
-    container.querySelectorAll('.service-card').forEach(card => {
-        card.addEventListener('click', () => {
-            const serviceId = card.dataset.serviceId;
-            const service = APP.services.find(s => s.id === serviceId);
-            if (service) showServiceModal(service);
-        });
-    });
-}
-
-function setupServiceFilters() {
-    const filterBtns = document.querySelectorAll('.filter-btn');
-
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Update active state
-            filterBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            // Filter services
-            const category = btn.dataset.category;
-
-            if (category === 'all') {
-                displayServices(APP.services);
-            } else {
-                const filtered = APP.services.filter(s => s.category === category);
-                displayServices(filtered);
-            }
-        });
-    });
-}
-
-// ==================== SERVICE MODAL ====================
-function showServiceModal(service) {
-    if (!APP.currentUser) {
-        showToast('Crie uma conta primeiro', 'warning');
-        switchView('home');
-        return;
-    }
-
-    const modal = document.getElementById('serviceModal');
-    const details = document.getElementById('serviceDetails');
-
-    // Build features list
-    const featuresList = service.features
-        ? service.features.map(f => `<li>${f}</li>`).join('')
-        : '';
-
-    // Build form fields
-    const formFields = service.fields
-        ? service.fields.map(field => {
-            if (field.type === 'textarea') {
-                return `
-                    <div class="form-group">
-                        <label>${field.label}${field.required ? ' *' : ''}</label>
-                        <textarea
-                            name="${field.name}"
-                            ${field.required ? 'required' : ''}
-                            placeholder="${field.placeholder || ''}"
-                        ></textarea>
-                    </div>
-                `;
-            } else if (field.type === 'select') {
-                const options = field.options
-                    ? field.options.map(opt => `<option value="${opt}">${opt}</option>`).join('')
-                    : '';
-                return `
-                    <div class="form-group">
-                        <label>${field.label}${field.required ? ' *' : ''}</label>
-                        <select name="${field.name}" ${field.required ? 'required' : ''}>
-                            <option value="">Selecione...</option>
-                            ${options}
-                        </select>
-                    </div>
-                `;
-            } else if (field.type === 'file') {
-                return `
-                    <div class="form-group">
-                        <label>${field.label}${field.required ? ' *' : ''}</label>
-                        <input
-                            type="file"
-                            name="${field.name}"
-                            ${field.required ? 'required' : ''}
-                            ${field.accept ? `accept="${field.accept}"` : ''}
-                        />
-                    </div>
-                `;
-            } else {
-                return `
-                    <div class="form-group">
-                        <label>${field.label}${field.required ? ' *' : ''}</label>
-                        <input
-                            type="${field.type}"
-                            name="${field.name}"
-                            ${field.required ? 'required' : ''}
-                            placeholder="${field.placeholder || ''}"
-                        />
-                    </div>
-                `;
-            }
-        }).join('')
-        : '';
-
-    details.innerHTML = `
-        <h2>${service.name}</h2>
-        <p class="service-category">${service.category}</p>
-        <p class="service-description" style="margin: 20px 0;">${service.description}</p>
-
-        ${featuresList ? `
-            <div style="margin: 20px 0;">
-                <h3>Incluído neste serviço:</h3>
-                <ul class="package-features">${featuresList}</ul>
-            </div>
-        ` : ''}
-
-        <div style="background: var(--surface-light); padding: 20px; border-radius: var(--radius-md); margin: 20px 0;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <div style="color: var(--text-muted); font-size: 14px;">Custo do serviço</div>
-                    <div style="font-size: 28px; font-weight: 800; color: var(--secondary-color);">
-                        ${formatCredits(service.credits)} créditos
-                    </div>
-                </div>
-                <div style="text-align: right;">
-                    <div style="color: var(--text-muted); font-size: 14px;">Seus créditos</div>
-                    <div style="font-size: 24px; font-weight: 700; color: ${APP.currentUser.credits >= service.credits ? 'var(--success-color)' : 'var(--error-color)'};">
-                        ${formatCredits(APP.currentUser.credits || 0)}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        ${APP.currentUser.credits < service.credits ? `
-            <div style="background: var(--warning-color); color: white; padding: 16px; border-radius: var(--radius-md); margin: 20px 0; text-align: center;">
-                <strong>Créditos insuficientes!</strong><br>
-                <button class="btn-primary" style="margin-top: 12px;" onclick="switchView('credits'); closeModal('serviceModal');">
-                    Comprar Créditos
-                </button>
-            </div>
-        ` : `
-            <form id="serviceOrderForm">
-                <h3>Preencha os dados do serviço:</h3>
-                ${formFields}
-                <button type="submit" class="btn-primary btn-large" style="margin-top: 20px;">
-                    Contratar Serviço - ${formatCredits(service.credits)} créditos
-                </button>
-            </form>
-        `}
-    `;
-
-    // Setup form submission
-    const form = details.querySelector('#serviceOrderForm');
-    if (form) {
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await submitServiceOrder(service, new FormData(form));
-        });
-    }
-
-    modal.classList.add('active');
-}
-
-async function submitServiceOrder(service, formData) {
-    showLoading();
-
-    try {
-        // Convert FormData to JSON
-        const data = {};
-        const files = {};
-
-        for (let [key, value] of formData.entries()) {
-            if (value instanceof File) {
-                // For files, we'll store them as base64 (simplified approach)
-                const base64 = await fileToBase64(value);
-                files[key] = {
-                    name: value.name,
-                    type: value.type,
-                    data: base64
-                };
-            } else {
-                data[key] = value;
-            }
-        }
-
-        const response = await fetch(`${API_BASE}/api/orders`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-User-ID': APP.currentUser.id
-            },
-            body: JSON.stringify({
-                userId: APP.currentUser.id,
-                serviceId: service.id,
-                formData: data,
-                files: files
-            })
-        });
-
-        const result = await response.json();
-
-        if (response.ok && result.order) {
-            showToast('Pedido realizado com sucesso!', 'success');
-            closeModal('serviceModal');
-
-            // Update user credits
-            APP.currentUser.credits = result.newBalance;
-            saveUserToStorage(APP.currentUser);
-            updateCreditsDisplay();
-
-            // Switch to orders view
-            setTimeout(() => switchView('orders'), 1000);
-        } else {
-            showToast(result.error || 'Erro ao criar pedido', 'error');
-        }
-    } catch (error) {
-        showToast('Erro ao processar pedido', 'error');
-        console.error('Order submission error:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-function fileToBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
-// ==================== CREDIT PACKAGES ====================
-async function loadCreditPackages() {
-    showLoading();
-
-    try {
-        const response = await fetch(`${API_BASE}/api/credits/packages`);
-        const data = await response.json();
-
-        if (data.packages) {
-            APP.creditPackages = data.packages;
-            displayCreditPackages(APP.creditPackages);
-        }
-    } catch (error) {
-        showToast('Erro ao carregar pacotes', 'error');
-        console.error('Load credit packages error:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-function displayCreditPackages(packages) {
-    const container = document.getElementById('creditPackages');
-
-    container.innerHTML = packages.map(pkg => `
-        <div class="package-card ${pkg.popular ? 'popular' : ''}" data-package-id="${pkg.id}">
-            ${pkg.popular ? '<div class="package-badge">Mais Popular</div>' : ''}
-            <div class="package-name">${pkg.name}</div>
-            <div class="package-credits">
-                ${formatCredits(pkg.credits)}
-                <span class="package-credits-label">créditos</span>
-            </div>
-            <div class="package-price">${formatCurrency(pkg.price)}</div>
-            ${pkg.bonus ? `<div style="color: var(--secondary-color); font-size: 14px; margin: 10px 0;">${pkg.bonus}</div>` : ''}
-            ${pkg.description ? `<p style="color: var(--text-secondary); font-size: 14px; margin: 16px 0;">${pkg.description}</p>` : ''}
-            <button class="package-btn">Comprar via PIX</button>
-        </div>
-    `).join('');
-
-    // Add click handlers
-    container.querySelectorAll('.package-card').forEach(card => {
-        const btn = card.querySelector('.package-btn');
-        btn.addEventListener('click', () => {
-            const packageId = card.dataset.packageId;
-            const pkg = APP.creditPackages.find(p => p.id === packageId);
-            if (pkg) initiatePixPayment(pkg);
-        });
-    });
-}
-
-// ==================== PIX PAYMENT ====================
-async function initiatePixPayment(pkg) {
-    if (!APP.currentUser) {
-        showToast('Faça login primeiro', 'warning');
-        switchView('home');
-        return;
-    }
-
-    showLoading();
-
-    try {
-        const response = await fetch(`${API_BASE}/api/credits/purchase`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: APP.currentUser.id,
-                packageId: pkg.id,
-                customer: {
-                    name: APP.currentUser.name,
-                    email: APP.currentUser.email,
-                    phone: APP.currentUser.phone,
-                    cpf: '00000000000' // TODO: Collect CPF in registration
-                }
-            })
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.pixCode) {
-            showPixModal(data, pkg);
-        } else {
-            showToast(data.error || 'Erro ao gerar PIX', 'error');
-        }
-    } catch (error) {
-        showToast('Erro ao processar pagamento', 'error');
-        console.error('PIX payment error:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-function showPixModal(paymentData, pkg) {
-    const modal = document.getElementById('pixModal');
-    const content = document.getElementById('pixPayment');
-
-    content.innerHTML = `
-        <div style="text-align: center;">
-            <h2>Pagamento via PIX</h2>
-            <p style="color: var(--text-secondary); margin: 12px 0;">
-                Pacote ${pkg.name} - ${formatCredits(pkg.credits)} créditos
-            </p>
-            <div style="font-size: 32px; font-weight: 800; color: var(--secondary-color); margin: 16px 0;">
-                ${formatCurrency(pkg.price)}
-            </div>
-
-            <div style="background: white; padding: 20px; border-radius: var(--radius-md); margin: 24px 0;">
-                ${paymentData.pixQrCode ? `<img src="${paymentData.pixQrCode}" alt="QR Code PIX" style="max-width: 100%; height: auto;">` : '<p style="color: var(--text-muted);">QR Code será gerado em instantes...</p>'}
-            </div>
-
-            <div style="background: var(--surface-light); padding: 16px; border-radius: var(--radius-md); margin: 20px 0;">
-                <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">
-                    Código PIX Copia e Cola:
-                </p>
-                <input
-                    type="text"
-                    value="${paymentData.pixCode || 'Gerando...'}"
-                    readonly
-                    style="width: 100%; padding: 12px; background: var(--surface); border: 2px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 12px; font-family: monospace;"
-                    onclick="this.select(); document.execCommand('copy'); showToast('Código copiado!', 'success');"
-                />
-            </div>
-
-            <div style="background: var(--primary-color); color: white; padding: 16px; border-radius: var(--radius-md); margin: 20px 0;">
-                <div style="font-size: 14px; margin-bottom: 8px;">Status do Pagamento:</div>
-                <div id="paymentStatus" style="font-size: 18px; font-weight: 700;">Aguardando pagamento...</div>
-            </div>
-
-            <p style="color: var(--text-muted); font-size: 13px; margin-top: 20px;">
-                Seus créditos serão adicionados automaticamente após a confirmação do pagamento
-            </p>
-        </div>
-    `;
-
-    modal.classList.add('active');
-
-    // Start polling for payment status
-    startPaymentStatusPolling(paymentData.paymentId);
-}
-
-let paymentPollingInterval;
-
-function startPaymentStatusPolling(paymentId) {
-    // Clear any existing interval
-    if (paymentPollingInterval) {
-        clearInterval(paymentPollingInterval);
-    }
-
-    // Poll every 3 seconds
-    paymentPollingInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`${API_BASE}/api/credits/payment/${paymentId}/status`);
-            const data = await response.json();
-
-            if (data.paid) {
-                clearInterval(paymentPollingInterval);
-
-                // Update status
-                const statusEl = document.getElementById('paymentStatus');
-                if (statusEl) {
-                    statusEl.textContent = 'Pagamento confirmado!';
-                    statusEl.parentElement.style.background = 'var(--success-color)';
-                }
-
-                // Refresh user data
-                await refreshUserData();
-
-                showToast('Pagamento confirmado! Créditos adicionados.', 'success');
-
-                // Close modal after delay
-                setTimeout(() => {
-                    closeModal('pixModal');
-                    switchView('home');
-                }, 2000);
-            }
-        } catch (error) {
-            console.error('Payment status check error:', error);
-        }
-    }, 3000);
-}
-
-// ==================== ORDERS ====================
-async function loadOrders() {
-    if (!APP.currentUser) return;
-
-    showLoading();
-
-    try {
-        const response = await fetch(`${API_BASE}/api/orders/user/${APP.currentUser.id}`);
-        const data = await response.json();
-
-        if (data.orders) {
-            APP.orders = data.orders;
-            displayOrders(APP.orders);
-        }
-    } catch (error) {
-        showToast('Erro ao carregar pedidos', 'error');
-        console.error('Load orders error:', error);
-    } finally {
-        hideLoading();
-    }
-}
-
-function displayOrders(orders) {
-    const container = document.getElementById('ordersList');
-
-    if (orders.length === 0) {
-        container.innerHTML = `
-            <div class="empty-state">
-                <p>Você ainda não fez nenhum pedido</p>
-                <button class="btn-primary" data-view="services">Ver Serviços</button>
-            </div>
-        `;
-
-        // Re-attach event listener
-        container.querySelector('[data-view]').addEventListener('click', function() {
-            switchView(this.dataset.view);
-        });
-        return;
-    }
-
-    container.innerHTML = orders.map(order => {
-        const statusClass = order.status.toLowerCase();
-        const statusText = {
-            'PENDING': 'Pendente',
-            'PROCESSING': 'Em Processamento',
-            'COMPLETED': 'Concluído',
-            'CANCELLED': 'Cancelado'
-        }[order.status] || order.status;
-
-        const date = new Date(order.createdAt).toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-
-        return `
-            <div class="order-card">
-                <div class="order-header">
-                    <div>
-                        <div class="order-title">${order.serviceName}</div>
-                        <div style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
-                            Pedido em ${date}
-                        </div>
-                    </div>
-                    <div class="order-status ${statusClass}">${statusText}</div>
-                </div>
-                <div class="order-info">
-                    <div>Créditos utilizados: <strong>${formatCredits(order.creditsUsed)}</strong></div>
-                    ${order.updates && order.updates.length > 0 ? `
-                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
-                            <strong>Atualizações:</strong>
-                            ${order.updates.map(update => `
-                                <div style="margin-top: 8px; font-size: 13px;">
-                                    <span style="color: var(--text-muted);">${new Date(update.date).toLocaleDateString('pt-BR')}</span>
-                                    - ${update.message}
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// ==================== MODAL CONTROLS ====================
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-        modal.classList.remove('active');
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        document.body.classList.remove('modal-open');
+
+        // Remove backdrop
+        const backdrop = document.querySelector('.modal-backdrop');
+        if (backdrop) {
+            backdrop.remove();
+        }
     }
 
-    // Stop payment polling if closing PIX modal
-    if (modalId === 'pixModal' && paymentPollingInterval) {
-        clearInterval(paymentPollingInterval);
+    // Clear pending action if closing auth modal
+    if (modalId === 'authModal') {
+        pendingAction = null;
+    }
+
+    // Stop payment check if closing pix modal
+    if (modalId === 'pixModal') {
+        stopPaymentStatusCheck();
+        currentPaymentId = null;
     }
 }
 
-function setupModals() {
-    // Close button handlers
-    document.querySelectorAll('.modal-close').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const modal = btn.closest('.modal');
-            if (modal) {
-                closeModal(modal.id);
-            }
-        });
-    });
-
-    // Click outside to close
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.querySelector('.modal-overlay')?.addEventListener('click', () => {
-            closeModal(modal.id);
-        });
-    });
-}
-
-// ==================== INITIALIZATION ====================
-function init() {
-    console.log('Initializing MALU Digital Services...');
-
-    // Setup event listeners
-    setupNavigation();
-    setupRegistration();
-    setupModals();
-
-    // Check if user is logged in
-    const isLoggedIn = loadUserFromStorage();
-
-    if (isLoggedIn) {
-        // Refresh user data from server
-        refreshUserData();
+function requireAuth(callback) {
+    if (!currentUser) {
+        pendingAction = callback;
+        openModal('authModal');
+        return false;
     }
-
-    // Start on home view
-    switchView('home');
-
-    console.log('App initialized successfully!');
+    return true;
 }
 
-// Start app when DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    init();
+function scrollToCredits() {
+    const creditsSection = document.getElementById('creditPackages');
+    if (creditsSection) {
+        creditsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
-// Expose closeModal globally for inline onclick handlers
-window.closeModal = closeModal;
-window.switchView = switchView;
-window.showToast = showToast;
+// ============================================================================
+// EXPORT FOR GLOBAL ACCESS
+// ============================================================================
+window.filterServices = filterServices;
+window.scrollToCredits = scrollToCredits;
