@@ -4,7 +4,7 @@
 
 import { Router } from 'itty-router';
 import { jsonResponse } from '../index';
-import { hashPassword, verifyPassword, generateToken, verifyToken } from '../utils/auth';
+import { hashPassword, verifyPassword, generateToken, verifyToken, storeToken } from '../utils/auth';
 
 const router = Router({ base: '/api/auth' });
 
@@ -78,7 +78,10 @@ router.post('/login', async (request) => {
         }
 
         // Generate token
-        const token = await generateToken({ userId: user.id, email: user.email }, request.env.JWT_SECRET);
+        const token = await generateToken({ userId: user.id, email: user.email });
+
+        // Store token in KV
+        await storeToken(token, { userId: user.id, email: user.email }, request.env);
 
         // Remove password from response
         delete user.password;
@@ -100,7 +103,7 @@ router.get('/me', async (request) => {
             return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
-        const payload = await verifyToken(token, request.env.JWT_SECRET);
+        const payload = await verifyToken(token, request.env);
         if (!payload) {
             return jsonResponse({ error: 'Invalid token' }, 401);
         }
@@ -127,7 +130,7 @@ router.put('/profile', async (request) => {
             return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
-        const payload = await verifyToken(token, request.env.JWT_SECRET);
+        const payload = await verifyToken(token, request.env);
         if (!payload) {
             return jsonResponse({ error: 'Invalid token' }, 401);
         }
