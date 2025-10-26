@@ -78,7 +78,7 @@ router.post('/login', async (request) => {
         }
 
         // Generate token
-        const token = await generateToken({ userId: user.id, email: user.email });
+        const token = await generateToken({ userId: user.id, email: user.email }, request.env.JWT_SECRET);
 
         // Remove password from response
         delete user.password;
@@ -100,7 +100,7 @@ router.get('/me', async (request) => {
             return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
-        const payload = await verifyToken(token);
+        const payload = await verifyToken(token, request.env.JWT_SECRET);
         if (!payload) {
             return jsonResponse({ error: 'Invalid token' }, 401);
         }
@@ -127,7 +127,7 @@ router.put('/profile', async (request) => {
             return jsonResponse({ error: 'Unauthorized' }, 401);
         }
 
-        const payload = await verifyToken(token);
+        const payload = await verifyToken(token, request.env.JWT_SECRET);
         if (!payload) {
             return jsonResponse({ error: 'Invalid token' }, 401);
         }

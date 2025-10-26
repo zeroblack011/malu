@@ -1,6 +1,27 @@
 /**
- * Authentication Utilities
+ * Authentication Utilities - Fixed for Cloudflare Workers
  */
+
+// Base64 encode for Workers (btoa replacement)
+function base64encode(str) {
+    const bytes = new TextEncoder().encode(str);
+    const binString = String.fromCodePoint(...bytes);
+    return btoa(binString)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=/g, '');
+}
+
+// Base64 decode for Workers (atob replacement)
+function base64decode(str) {
+    str = str.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) {
+        str += '=';
+    }
+    const binString = atob(str);
+    const bytes = Uint8Array.from(binString, (m) => m.codePointAt(0));
+    return new TextDecoder().decode(bytes);
+}
 
 // Hash password using Web Crypto API
 export async function hashPassword(password) {
@@ -18,7 +39,7 @@ export async function verifyPassword(password, hash) {
 }
 
 // Generate JWT token
-export async function generateToken(payload) {
+export async function generateToken(payload, secret) {
     const header = {
         alg: 'HS256',
         typ: 'JWT',
@@ -30,19 +51,19 @@ export async function generateToken(payload) {
         exp: Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60), // 30 days
     };
 
-    const encodedHeader = btoa(JSON.stringify(header));
-    const encodedData = btoa(JSON.stringify(data));
+    const encodedHeader = base64encode(JSON.stringify(header));
+    const encodedData = base64encode(JSON.stringify(data));
 
     const token = `${encodedHeader}.${encodedData}`;
 
-    // In production, sign with secret key
-    const signature = await createSignature(token, 'your-secret-key');
+    // Sign with secret key
+    const signature = await createSignature(token, secret);
 
     return `${token}.${signature}`;
 }
 
 // Verify JWT token
-export async function verifyToken(token) {
+export async function verifyToken(token, secret) {
     try {
         const parts = token.split('.');
         if (parts.length !== 3) {
@@ -51,14 +72,14 @@ export async function verifyToken(token) {
 
         const [encodedHeader, encodedData, signature] = parts;
 
-        // In production, verify signature
-        const expectedSignature = await createSignature(`${encodedHeader}.${encodedData}`, 'your-secret-key');
+        // Verify signature
+        const expectedSignature = await createSignature(`${encodedHeader}.${encodedData}`, secret);
 
         if (signature !== expectedSignature) {
             return null;
         }
 
-        const data = JSON.parse(atob(encodedData));
+        const data = JSON.parse(base64decode(encodedData));
 
         // Check expiration
         if (data.exp && data.exp < Math.floor(Date.now() / 1000)) {
@@ -67,6 +88,7 @@ export async function verifyToken(token) {
 
         return data;
     } catch (error) {
+        console.error('Token verification error:', error);
         return null;
     }
 }

@@ -16,7 +16,7 @@ async function requireAuth(request) {
         return jsonResponse({ error: 'Unauthorized' }, 401);
     }
 
-    const payload = await verifyToken(token);
+    const payload = await verifyToken(token, request.env.JWT_SECRET);
     if (!payload) {
         return jsonResponse({ error: 'Invalid token' }, 401);
     }
