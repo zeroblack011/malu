@@ -5,6 +5,7 @@
 
 import { Router } from 'itty-router';
 import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
+import { getIndexHTML } from './static-app';
 import { authRoutes } from './routes/auth';
 import { creditsRoutes } from './routes/credits';
 import { servicesRoutes } from './routes/services';
@@ -44,104 +45,8 @@ router.get('/api/health', () => {
 
 // Static assets (PWA)
 router.get('/', async (request, env, ctx) => {
-    // Try to serve from Workers Sites first
-    if (env.__STATIC_CONTENT) {
-        try {
-            return await getAssetFromKV(
-                {
-                    request: new Request(`${new URL(request.url).origin}/index.html`, request),
-                    waitUntil: ctx.waitUntil.bind(ctx),
-                },
-                {
-                    ASSET_NAMESPACE: env.__STATIC_CONTENT,
-                    ASSET_MANIFEST: JSON.parse(__STATIC_CONTENT_MANIFEST),
-                }
-            );
-        } catch (e) {
-            console.log('Workers Sites error:', e);
-        }
-    }
-
-    // Fallback: serve inline HTML
-    return new Response(`
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Malu Digital Services</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 600px;
-            text-align: center;
-        }
-        h1 {
-            color: #667eea;
-            margin: 0 0 20px 0;
-        }
-        .status {
-            background: #10b981;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 50px;
-            display: inline-block;
-            margin: 20px 0;
-        }
-        .info {
-            background: #f3f4f6;
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-            text-align: left;
-        }
-        a {
-            color: #667eea;
-            text-decoration: none;
-            font-weight: 600;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 Malu Digital Services</h1>
-        <div class="status">✅ Worker Online</div>
-        <p>Sua aplicação está funcionando!</p>
-
-        <div class="info">
-            <h3>✅ Configurado:</h3>
-            <ul style="text-align: left;">
-                <li>✅ KV Namespaces (USERS_KV, ORDERS_KV)</li>
-                <li>✅ API Routes</li>
-                <li>✅ Secrets configurados</li>
-            </ul>
-        </div>
-
-        <div class="info">
-            <h3>🧪 Teste as APIs:</h3>
-            <p><a href="/api/health">/api/health</a> - Health check</p>
-        </div>
-
-        <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
-            Os arquivos estáticos PWA serão carregados após configuração do Workers Sites.
-        </p>
-    </div>
-</body>
-</html>
-    `, {
+    // Serve inline PWA app
+    return new Response(getIndexHTML(), {
         headers: {
             'Content-Type': 'text/html;charset=UTF-8',
             ...corsHeaders,
