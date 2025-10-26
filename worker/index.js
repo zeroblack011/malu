@@ -118,8 +118,8 @@ router.post('/api/credits/purchase', async (request) => {
     try {
         const { userId, packageId, customer } = await request.json();
 
-        const package = CREDIT_PACKAGES[packageId];
-        if (!package) {
+        const creditPackage = CREDIT_PACKAGES[packageId];
+        if (!creditPackage) {
             return jsonResponse({ error: 'Pacote não encontrado' }, 404);
         }
 
@@ -135,9 +135,9 @@ router.post('/api/credits/purchase', async (request) => {
         const payment = await createAsaasPayment(request.env.ASAAS_API_KEY, {
             customer: asaasCustomer.id,
             billingType: 'PIX',
-            value: package.price,
+            value: creditPackage.price,
             dueDate: new Date().toISOString().split('T')[0],
-            description: `Pacote ${package.name} - ${package.credits} créditos`,
+            description: `Pacote ${creditPackage.name} - ${creditPackage.credits} créditos`,
             externalReference: `credits-${userId}-${Date.now()}`,
         });
 
@@ -147,8 +147,8 @@ router.post('/api/credits/purchase', async (request) => {
             id: transactionId,
             userId,
             packageId,
-            credits: package.credits,
-            price: package.price,
+            credits: creditPackage.credits,
+            price: creditPackage.price,
             asaasPaymentId: payment.id,
             asaasCustomerId: asaasCustomer.id,
             status: 'PENDING',
